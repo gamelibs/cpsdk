@@ -1,0 +1,1038 @@
+class adSdk {
+    constructor(config) {
+        this.config = config;
+        this.adSdk_isReady = false;
+
+        window.dataLayer = window.dataLayer || [];
+        this.gameid = new URLSearchParams(document.location.search).get("gameid");
+        this.pubid = new URLSearchParams(document.location.search).get("pubid");
+        this.ret = new URLSearchParams(document.location.search).get("ret");
+        this.is_ad_test = new URLSearchParams(document.location.search).get("vb") === "beta";
+        this.gamePlayTimer = null;
+        this._insert_tagmanager();
+
+        this._eventAds = {
+            listeners: {
+                'ready': [],
+                'beforeAd': [],
+                'afterAd': [],
+                'adDismissed': [],
+                'adViewed': [],
+                'error': [],
+                'interstitial': [],
+                'reward': [],
+            },
+            on(eventName, callback) {
+                if (!this.listeners[eventName]) {
+                    console.error(`Event ${eventName} does not exist.`);
+                    return;
+                }
+                this.listeners[eventName].push(callback);
+            },
+            emit(eventName, ...args) {
+                if (!this.listeners[eventName]) {
+                    console.error(`Event ${eventName} does not exist.`);
+                    return;
+                }
+                this.listeners[eventName].forEach(callback => {
+                    callback(...args);
+                });
+            },
+            off(eventName, callback) {
+                if (!this.listeners[eventName]) {
+                    console.error(`Event ${eventName} does not exist.`);
+                    return;
+                }
+                this.listeners[eventName] = this.listeners[eventName].filter(cb => cb !== callback);
+            }
+        }
+
+        this.is_adsense = null;//是否adsense广告
+        this.ads_code = null;
+        this.adType = null;
+        this.is_first = true;
+        this.interstitial_requests_count = 0; // 插页广告请求次数
+        this.interstitial_req_frequency = false; // 插页广告请求频率
+        this.interstitial_time_start = 0; // 插页广告请求开始时间
+
+        this.reward_requests_count = 3; // 激励广告请求次数
+        this.reward_time_start = 0; // 激励广告请求开始时间
+        this.reward_req_frequency = false; // 激励广告请求频率
+
+        this.req_ad_stabilization = false; // 请求广告稳定性
+        this.req_ad_timeout = true; // 请求广告超时
+        this.interstitialAd = this._showInterstitialAd;
+        this.rewardAd = this._showRewardAd;
+
+        // adx
+        this.adContainer = null;
+        this.videoContent = null;
+        this.adsLoader = null;
+        this.adsManager = null;
+        this.adDisplayContainer = null;
+        this.videoWidth = null;
+        this.videoHeight = null;
+        this.adsRequest = null;
+        this.adx_isLoaded = false;
+        // Initialize adx_callback with empty methods to avoid "undefined is not a function" errors
+        this.adx_callback = {
+            error: () => { },
+            beforeAd: () => { },
+            afterAd: () => { },
+            adViewed: () => { },
+            adDismissed: () => { }
+        };
+
+        // ads事件流程 
+        this._eventAds.on('ready', (param1, param2) => {
+            this.__sdklog(param1, param2);
+        })
+
+        this._eventAds.on('interstitial', (param1) => {
+            gtag('event', 'game_interstitialad', { send: 'sdk', 'ad_type': this.adType });
+            this.__sdklog(param1, this.adType);
+        })
+
+        this._eventAds.on('reward', (param1) => {
+            gtag('event', 'game_reward', { send: 'sdk', 'ad_type': this.adType });
+            this.__sdklog(param1, this.adType);
+        })
+
+        this._eventAds.on('beforeAd', (param1, param2) => {
+
+            if (this.adx_type === "rewardedAd" || param1 === "rewardedAd") {
+                gtag('event', 'game_reward_open', { send: 'sdk', 'ad_type': this.adType });
+
+            } else {
+
+                gtag('event', 'game_interstitialad_open', { send: 'sdk', 'ad_type': this.adType });
+            }
+            this.__sdklog2("*******adevent**********", param1, param2, this.adType);
+        })
+
+        this._eventAds.on('adDismissed', (param1) => {
+            gtag('event', 'game_reward_dismissed', { send: 'sdk', 'ad_type': this.adType });
+            this.__sdklog2("*******adevent**********", param1, this.adType);
+        })
+
+        this._eventAds.on('adViewed', (param1) => {
+            gtag('event', 'game_reward_viewed', { send: 'sdk', 'ad_type': this.adType });
+            this.__sdklog2("*******adevent**********", param1, this.adType);
+        })
+
+        this._eventAds.on('afterAd', (param1, param2) => {
+            gtag('event', 'game_interstitialad_viewed', { send: 'sdk', 'ad_type': this.adType });
+            this.__sdklog2("*******adevent**********", param1, param2, this.adType);
+        })
+
+        this._eventAds.on('error', (param1, param2) => {
+
+            switch (param2) {
+                case 'timeout':
+                case 'error':
+                case 'frequencyCapped':
+                case 'notReady':
+                case 'invalid':
+                case 'noAdPreloaded':
+                case 'frequencyrewardAd':
+                case 'frequencyinterstitialAd':
+                case 'other':
+                    gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
+                    break;
+                case 'viewed':
+                case 'dismissed':
+                    break;
+                default:
+                    gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
+                    break;
+            }
+            if (param2 !== 'viewed' && param2 !== 'dismissed') {
+
+                this.__sdklog2("*******adevent**********", param1, param2, this.adType);
+            }
+        })
+
+        this._initAds();
+
+    }
+
+
+
+    // 判断广告类型ad_type,根据pubid和dev来获取广告代码
+    _initAds() {
+
+        // type_1: adsense
+        // type_2: adx
+        // type_3: adx+adsens
+
+        let dev = this.config.client;
+
+        let code = ads_list[this.pubid + '-' + dev] || ads_list[dev] || ads_list['default_ads'];
+
+
+
+        if (code) {
+            this.is_adsense = code.startsWith('data-ad-client') ? true : false;
+            if (this.is_adsense) {
+                this._openAdsense(code);
+            } else {
+                this._openAdx(code);
+            }
+        } else {
+            this.is_adsense = false; // 保底adx
+            this._openAdx(vast_url);
+        }
+
+
+    }
+
+    _openAdsense(code) {
+
+        this.adType = 'adsense';
+        const adsense_Script = document.createElement("script");
+        adsense_Script.async = true;
+        adsense_Script.setAttribute('data-ad-frequency-hint', '30s');
+        adsense_Script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
+        adsense_Script.setAttribute('crossorigin', 'anonymous');
+
+        if (this.is_ad_test) { adsense_Script.setAttribute('data-adbreak-test', 'on') };
+
+        let attr_arr = code.split(',');
+        for (let i = 0; i < attr_arr.length; i++) {
+            adsense_Script.setAttribute(attr_arr[i].split('=')[0], attr_arr[i].split('=')[1]);
+        }
+
+        adsense_Script.onload = () => {
+            window.adsbygoogle = window.adsbygoogle || [];
+            window.adBreak = window.adConfig = function (o) { adsbygoogle.push(o); }
+            let isTimeOut = false;
+            window.adConfig({
+                preloadAdBreaks: "on",
+                sound: "on",
+                onReady: () => {
+                    isTimeOut = true;
+                    this.adSdk_isReady = true;
+                    this._eventAds.emit('ready', "adSdk_isReady:true", "s");
+                }
+            });
+
+            setTimeout(() => {
+                if (!isTimeOut) {
+                    this._eventAds.emit('error', "timeout", "noReady-adsense");
+                }
+            }, 5000);
+        }
+
+        adsense_Script.onerror = (error) => {
+            this._eventAds.emit('error', "error", "loaded-adsense");
+            this.__sdklog("adsense loadError:", error);
+        }
+
+        document.head.appendChild(adsense_Script);
+
+    }
+
+    _openAdx(code) {
+        this.adType = 'adx';
+        this.ads_code = code;
+
+        let adx_script = document.createElement("script");
+        adx_script.type = "text/javascript";
+        adx_script.src = "//imasdk.googleapis.com/js/sdkloader/ima3.js";
+        document.head.appendChild(adx_script);
+
+        adx_script.onload = () => {
+            let self = this;
+
+            self.adSdk_isReady = true;
+            self._eventAds.emit('ready', "adSdk_isReady:true", "x");
+
+        }
+
+        adx_script.onerror = () => {
+            this._eventAds.emit('error', "error", "loaded-adx");
+            this.__sdklog("adx load error");
+        }
+    }
+
+    _createAdxDom() {
+        const adTemplate = `
+        <style id="adx-style">
+            #adx-mainContainer {
+                all: initial; /* 重置样式，避免被父级影响 */
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+                background-color: rgba(0,0,0,0.8) !important;
+                z-index: 2147483647 !important; /* 最大安全值 */
+                pointer-events: auto !important;
+            }
+            #adx-adContainer {
+                width: 100% !important;
+                height: 100% !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+            }
+            #adx-contentElement {
+                width: 90vw !important;
+                max-width: 1280px !important;
+                aspect-ratio: 16 / 9 !important;
+                height: auto !important;
+            }
+        </style>
+        <div id="adx-mainContainer">
+            <div id="adx-adContainer">
+                <video id="adx-contentElement" playsinline></video>
+            </div>
+        </div>
+    `;
+        document.body.insertAdjacentHTML('beforeend', adTemplate);
+    }
+
+    _destroyAdxDom() {
+        const el = document.getElementById('adx-mainContainer');
+        if (el) el.remove();
+        const styleTag = document.getElementById('adx-style');
+        if (styleTag) styleTag.remove();
+        self.adContainer = null;
+        self.videoContent = null;
+    }
+
+    _onAdsManagerLoaded(adsManagerLoadedEvent) {
+        let self = this;
+
+        // function showAdContainer() {
+        //     const el = document.getElementById('adx-mainContainer');
+        //     if (el) {
+        //         el.style.display = 'flex';
+        //         el.style.zIndex = '9999';
+        //     }
+        // }
+
+        // function hideAdContainer() {
+        //     const el = document.getElementById('adx-mainContainer');
+        //     if (el) {
+        //         el.style.display = 'none';
+        //         el.style.zIndex = '-9999';
+        //     }
+        // }
+
+
+        const adsRenderingSettings = new google.ima.AdsRenderingSettings();
+        adsRenderingSettings.useCustomPlaybackUI = false;
+
+        self.adsManager = adsManagerLoadedEvent.getAdsManager(self.videoContent, adsRenderingSettings);
+
+        try {
+            self.adsManager.init(
+                self.videoWidth,
+                self.videoHeight,
+                google.ima.ViewMode.NORMAL
+            );
+            self.adsManager.start();
+        } catch (e) {
+            self._eventAds.emit('error', 'error', 'start_failed');
+            self.adx_callback.error('start_failed');
+            console.error('AdsManager start error:', e);
+        }
+
+        let isAdPaused = false;
+
+        self.adContainer.addEventListener('click', () => {
+            if (!self.adsManager) return;
+
+            if (isAdPaused) {
+                self.adsManager.resume();
+            } else {
+                self.adsManager.pause();
+            }
+
+            isAdPaused = !isAdPaused;
+        });
+
+        self.adsManager.addEventListener(
+            google.ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED,
+            () => {
+                self.req_ad_timeout = false;
+                // showAdContainer();
+                self._eventAds.emit('beforeAd', "beforeAd", "pause");
+                self.adx_callback.beforeAd();
+            }
+        );
+
+
+        self.adsManager.addEventListener(
+            google.ima.AdEvent.Type.COMPLETE,
+            () => {
+                self.req_ad_timeout = false;
+                self._destroyAdxDom();
+                if (self.adx_type === 'rewardedAd') {
+                    self._eventAds.emit('adViewed', "adViewed", "completed");
+                    self.adx_callback.adViewed();
+                }
+
+
+            }
+        );
+
+        self.adsManager.addEventListener(
+            google.ima.AdEvent.Type.SKIPPED,
+            () => {
+                self.req_ad_timeout = false;
+                self._destroyAdxDom();
+                if (self.adx_type === 'rewardedAd') {
+                    self._eventAds.emit('adDismissed', "adDismissed", "skipped");
+                    self.adx_callback.adDismissed();
+                }
+
+
+            }
+        );
+
+        self.adsManager.addEventListener(
+            google.ima.AdEvent.Type.CONTENT_RESUME_REQUESTED,
+            () => {
+                self.req_ad_timeout = false;
+                self._destroyAdxDom();
+                if (self.adx_type !== 'rewardedAd') {
+                    self._eventAds.emit('afterAd', "afterAd", "resume");
+                    self.adx_callback.afterAd();
+                }
+            }
+        );
+
+
+        self.adsManager.addEventListener(
+            google.ima.AdErrorEvent.Type.AD_ERROR,
+            (event) => {
+                self.req_ad_timeout = false;
+                self._destroyAdxDom();
+                let errorData = event.getError();
+                let errorType = errorData && errorData.data ? errorData.data.type : 'unknown';
+                let errorMessage = errorData && errorData.data ? errorData.data.errorMessage : 'Unknown error';
+                self._eventAds.emit('error', errorType, errorMessage);
+                self.adx_callback.error(errorType);
+
+            }
+        );
+
+
+    }
+
+    _onAdError(event) {
+        this._destroyAdxDom();
+
+        this.req_ad_timeout = false;
+
+        let errorData = event.getError();
+        let errorType = errorData && errorData.data ? errorData.data.type : 'unknown';
+        let errorMessage = errorData && errorData.data ? errorData.data.errorMessage : 'Unknown error';
+
+        this._eventAds.emit('error', errorType, errorMessage);
+        this.adx_callback.error(errorType);
+
+    }
+
+    _showAdx() {
+
+        let self = this;
+        self.is_first = false;
+
+        if (self.adsManager) {
+            self.adsManager.destroy();
+            self.adsManager = null;
+        }
+
+        if (self.adsLoader) {
+            self.adsLoader.destroy();
+            self.adsLoader = null;
+        }
+
+        this._createAdxDom();
+
+
+        self.adContainer = document.getElementById('adx-adContainer');
+        self.videoContent = document.getElementById('adx-contentElement');
+
+
+        if (!self.adContainer || !self.videoContent) {
+            console.error('ADX DOM elements not found');
+            self._eventAds.emit('error', 'error', 'dom_not_found');
+            self.adx_callback.error('dom_not_found');
+            return;
+        }
+
+
+        self.adDisplayContainer = new google.ima.AdDisplayContainer(self.adContainer, self.videoContent);
+        self.adsLoader = new google.ima.AdsLoader(self.adDisplayContainer);
+
+
+        self.adsLoader.addEventListener(
+            google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,
+            (event) => self._onAdsManagerLoaded(event),
+            false
+        );
+        self.adsLoader.addEventListener(
+            google.ima.AdErrorEvent.Type.AD_ERROR,
+            (event) => self._onAdError(event),
+            false
+        );
+
+        self.videoWidth = document.documentElement.clientWidth || window.innerWidth;
+        self.videoHeight = document.documentElement.clientHeight || window.innerHeight;
+        self.adDisplayContainer.initialize();
+
+
+        const adsRequest = new google.ima.AdsRequest();
+        adsRequest.adTagUrl = this.is_ad_test ? self._getTestAdxUrl() :
+            (self.ads_code + self._generateUniqueCorrelator());
+        console.log('adxRequest=', self.videoWidth, self.videoHeight);
+        adsRequest.linearAdSlotWidth = self.videoWidth;
+        adsRequest.linearAdSlotHeight = self.videoHeight;
+
+
+        self.adsLoader.requestAds(adsRequest);
+    }
+
+    // 插页
+    _showInterstitialAd(callback) {
+        let self = this;
+        if(!self.adSdk_isReady) return;
+        //1秒内禁止重复,防抖
+        if (self.req_ad_stabilization) return;
+        setTimeout(() => {
+            console.log('^^^^^^^^^req_ad_stabilization^^^^^^^^^^^^');
+            self.req_ad_stabilization = false;
+        }, 1000);
+
+        self.req_ad_stabilization = true;
+
+        self._eventAds.emit('interstitial', "interstitialAd");
+
+        let now = Date.now();
+        if (!self.interstitial_time_start) {
+            self.interstitial_time_start = now;
+        }
+
+        // 如果超过30秒，重置计数器
+        let now_duration = now - self.interstitial_time_start;
+        console.log('now_duration=', now_duration, 'interstitial_time_start=', self.interstitial_time_start);
+
+        if (self.interstitial_requests_count > 1) {
+
+            if (now_duration > 30000) {
+
+                self.interstitial_time_start = now;
+            } else {
+                callback.error({ ad_error_type: 'frequencyinterstitialAd' })
+                self._eventAds.emit('error', "frequencyinterstitialAd", 'frequencyinterstitialAd');
+                return false;
+
+            }
+        }
+        self.interstitial_requests_count++;
+
+        // 请求广告超时
+        self.req_ad_timeout = true;
+        if (self.is_adsense) {
+
+            adBreak({
+                type: self.is_first ? 'start' : ["start", "pause", "next", "browse"][Math.floor(Math.random() * 4)],
+                beforeAd() {
+
+                    self.req_ad_timeout = false;
+                    self._eventAds.emit('beforeAd', "interstitialAd", "beforeAd");
+                    callback.beforeAd();
+                },
+                afterAd() {
+
+                    self._eventAds.emit('afterAd', "interstitialAd", "afterAd");
+                    callback.afterAd();
+                },
+                adBreakDone(placement_info) {
+                    self.is_first = false;
+                    self.req_ad_timeout = false;
+                    console.log('adBreakDone', placement_info);
+                    self._eventAds.emit('error', "interstitial_error", placement_info.breakStatus);
+
+                    if (placement_info.breakStatus !== 'viewed') {
+
+                        callback.error(placement_info.breakStatus);
+                    }
+
+                }
+            });
+        } else {
+
+            self.adx_type = 'interstitialAd';
+            self.adx_callback = callback;
+
+            self._showAdx();
+
+
+        }
+
+        setTimeout(() => {
+            if (self.req_ad_timeout) {
+                self.is_first = false;
+                self._eventAds.emit('error', "error", "timeout");
+                callback.error("timeout");
+            }
+        }, 8000);
+    }
+
+    // 激励
+    _showRewardAd(callback) {
+        let self = this;
+        if(!self.adSdk_isReady) return;
+        self._eventAds.emit('reward', "rewardAd");
+
+        if (self.req_ad_stabilization) return;
+        setTimeout(() => {
+            self.req_ad_stabilization = false;
+        }, 1000);
+
+        self.req_ad_stabilization = true;
+
+        const now = Date.now();
+        if (!this.reward_time_start) {
+            this.reward_time_start = now;
+
+        }
+
+        // 如果超过30秒，重置计数器
+        let now_duration = now - self.reward_time_start;
+        console.log('now_duration=', now_duration, 'reward_time_start=', self.reward_time_start);
+        if (now_duration > 30000) {
+            self.reward_time_start = 0;
+            this.reward_requests_count = 3;
+        }
+
+        // 检查是否超过3次限制
+        if (self.reward_requests_count <= 0) {
+            callback.error({ ad_error_type: 'frequencyrewardAd' })
+            self._eventAds.emit('error', "frequencyrewardAd", 'frequencyrewardAd');
+            return false;
+        }
+
+
+        self.reward_requests_count--;
+        // 请求广告超时
+        self.req_ad_timeout = true;
+
+        if (self.is_adsense) {
+            adBreak({
+                type: 'reward',
+                beforeAd() {
+                    self.req_ad_timeout = false;
+
+                    self._eventAds.emit('beforeAd', "rewardedAd", 'beforeAd');
+                    callback.beforeAd();
+                },
+                beforeReward(showAdFn) { showAdFn(); },
+                adDismissed() {
+
+                    self._eventAds.emit('adDismissed', "adDismissed");
+                    callback.adDismissed();
+                },
+                adViewed() {
+
+                    self._eventAds.emit('adViewed', "adViewed");
+                    callback.adViewed();
+                },
+                adBreakDone(placement_info) {
+
+                    self.req_ad_timeout = false;
+                    self._eventAds.emit('error', "reward_error", placement_info.breakStatus);
+                    if (placement_info.breakStatus !== 'viewed') {
+                        callback.error(placement_info.breakStatus);
+                    }
+                }
+            });
+        } else {
+            self.adx_type = 'rewardedAd';
+            self.adx_callback = callback;
+
+            self._showAdx();
+        }
+
+        setTimeout(() => {
+            if (self.req_ad_timeout) {
+
+                self._eventAds.emit('error', "error", "timeout");
+                callback.error("timeout");
+            }
+        }, 8000);
+    }
+
+
+
+    __sdklog(...args) {
+        const formatParam = (arg) => {
+            if (typeof arg === 'string') return `'${arg}'`;
+            if (typeof arg === 'object') return JSON.stringify(arg);
+            return String(arg);
+        };
+
+        const params = args.map(formatParam).join(' ');
+
+        console.log(
+            `%c ***CPSDK***: ${params}`,
+
+            'background-color: #f9f9f9; ' +
+            'border: 2px solid #8e44ad; ' +
+            'color: #333; ' +
+            'padding: 5px 15px; ' +
+            'border-radius: 5px; ' +
+            'font-weight: 500; ' +
+            'box-shadow: 0 0 5px rgba(142, 68, 173, 0.3);'
+        );
+    }
+
+    __sdklog2(...args) {
+        const formatParam = (arg) => {
+            if (typeof arg === 'string') return `'${arg}'`;
+            if (typeof arg === 'object') return JSON.stringify(arg);
+            return String(arg);
+        };
+
+        const params = args.map(formatParam).join(' ');
+
+        console.log(
+            `%c ***CPSDK***: ${params}`,
+            'background: linear-gradient(to right, #8e44ad, #ba43ff); ' +
+            'color: white; ' +
+            'padding: 5px 15px; ' +
+            'border-radius: 5px; ' +
+            'font-weight: bold; ' +
+            'text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);'
+
+        );
+    }
+
+    __sdklog3(...args) {
+        const formatParam = (arg) => {
+            if (typeof arg === 'string') return `'${arg}'`;
+            if (typeof arg === 'object') return JSON.stringify(arg);
+            return String(arg);
+        };
+
+        const params = args.map(formatParam).join(' ');
+
+        console.log(
+            `%c ***DOTGTAG***: ${params}`,
+            'background: linear-gradient(to right,rgb(68, 173, 166),rgb(4, 170, 173)); ' +
+            'color: white; ' +
+            'padding: 5px 15px; ' +
+            'border-radius: 5px; ' +
+            'font-weight: bold; ' +
+            'text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);'
+
+        );
+    }
+
+
+
+    // tag init
+    _insert_tagmanager() {
+        let self = this;
+        const ga_script = document.createElement("script");
+        ga_script.async = true;
+        ga_script.src = "https://www.googletagmanager.com/gtag/js?id=G-NL2943ZRFH";
+        ga_script.setAttribute('crossorigin', 'anonymous');
+        ga_script.onload = () => {
+
+
+            gtag("consent", "default", {
+                "ad_storage": "granted",
+                "ad_user_data": "granted",
+                "ad_personalization": "granted",
+                "analytics_storage": "granted"
+            });
+
+            gtag('js', new Date());
+            gtag('set', 'cookie_flags', 'SameSite=None;Secure');
+            gtag('config', 'G-NL2943ZRFH', {
+                game_id: self.gameid,
+                'dev_name': self.config.client
+            });
+        };
+
+        let gamePlayTimerStarted = false;
+
+        window.gtag = function () {
+
+
+            let own_event_list = [
+                'ad_error',
+                'game_reward_open',
+                'game_interstitialad_open',
+                'game_play_time',
+                'game_reward_dismissed',
+                'game_interstitialad',
+                'game_reward',
+                'game_reward_viewed',
+                'game_interstitialad_viewed'
+            ];
+
+            let event_List = [
+                'game_start',
+                'level_start',
+                'level_end'
+            ];
+
+
+
+            let ar = [...arguments];
+            let ar0 = ar[0];
+            let ar1 = ar[1];
+            let ar2 = ar[2];
+
+            if (
+                (["set", "js", "config", "consent"].indexOf(ar0) !== -1) ||
+                (event_List.indexOf(ar1) !== -1) ||
+                (own_event_list.indexOf(ar1) !== -1 &&
+                    ar2 &&
+                    ar2['send'] &&
+                    ar2['send'] === 'sdk')
+            ) {
+                self.__sdklog3(arguments)
+                window.dataLayer.push(arguments);
+            }
+
+            if (ar[1] === 'game_start' && !gamePlayTimerStarted) {
+                gamePlayTimerStarted = true;
+                setInterval(function () {
+                    // window.dataLayer.push(['event', 'game_play_time', { send: 'sdk' }]);
+                    gtag('event', 'game_play_time', { send: 'sdk' });
+                }, 30000);
+            }
+
+
+        };
+        document.head.appendChild(ga_script);
+
+
+
+    }
+
+    _getTestAdxUrl() {
+        // 返回一个测试的ADX URL
+        const adx_url = backup_adx_urls['Preroll'] + Date.now();
+        console.log('Using test ADX URL:', adx_url);
+
+        return adx_url
+    }
+    _generateUniqueCorrelator() {
+        return Date.now();//Math.random().toString(36).substr(2, 9);// +
+    }
+
+    _ajax(url, method, data) {
+        return new Promise(function (resolve, reject) {
+            let xhr = new XMLHttpRequest();
+            xhr.open(method, url, true)
+            xhr.responseType = 'json'
+            xhr.setRequestHeader("Accept", "application/json")
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) {
+                    return;
+                }
+                if (xhr.status === 200) {
+                    resolve(xhr.response)
+                } else {
+                    reject(xhr.statusText)
+                }
+            }
+            if (method === 'GET') {
+                xhr.send()
+            } else {
+                xhr.send(JSON.stringify(data))
+            }
+        })
+
+    }
+
+}
+
+const backup_adx_urls = {
+
+    //单行内嵌线性
+    'Inline': 'https://pubads.g.doubleclick.net/gampad/ads?' +
+        'iu=/21775744923/external/single_ad_samples&' +
+        'sz=640x480&' +
+        'cust_params=sample_ct%3Dlinear&' +
+        'ciu_szs=300x250%2C728x90&gdfp_req=1&' +
+        'output=vast&' +
+        'unviewed_position_start=1&' +
+        'env=vp&' +
+        'impl=s&' +
+        'correlator=',
+    //单个可跳过的插播广告
+    'Preroll': 'https://pubads.g.doubleclick.net/gampad/ads?iu=/21775744923/external/single_preroll_skippable&' +
+        'sz=640x480&' +
+        'ciu_szs=300x250%2C728x90&' +
+        'gdfp_req=1&' +
+        'output=vast&' +
+        'unviewed_position_start=1&' +
+        'env=vp&' +
+        'impl=s&' +
+        'correlator=',
+    //vmap广告
+    'VMAP': 'https://pubads.g.doubleclick.net/gampad/ads?' +
+        'iu=/21775744923/external/vmap_ad_samples&' +
+        'sz=640x480&' +
+        'cust_params=sample_ar=premidpost&' +
+        'ciu_szs=300x250&' +
+        'gdfp_req=1&' +
+        'ad_rule=1&' +
+        'output=vmap&' +
+        'unviewed_position_start=1&' +
+        'env=vp&' +
+        'impl=s&' +
+        'adtest=on&' +
+        'ad_type=video&' +
+        'correlator=',
+
+}
+
+
+
+const vast_url = 'https://pubads.g.doubleclick.net/gampad/ads?iu=/22149012983/h5-bwg-vast/400x300-1180marketjs-id00032-bwg&description_url=https%3A%2F%2Fwww.likebox.xyz&tfcd=0&npa=0&sz=400x300&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=';
+const ads_list = {
+    "default_ads": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=4449826950",
+    "1312-marketjs": "data-ad-client=ca-pub-3615084434427281",
+    "1313-marketjs": "data-ad-client=ca-pub-3615084434427281",
+    "1211-marketjs": "data-ad-client=ca-pub-3615084434427281",
+    "589-marketjs": "data-ad-client=ca-pub-3615084434427281",
+    "495-marketjs": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9271205033",
+    "495-behappy": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=4889854667",
+    "495-91games": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9806299103",
+    "495-cpsense": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=6594334796",
+    "316-cpsense": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/22846978691\/h5-bwg-vast\/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "316-marketjs": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/22846978691\/h5-bwg-vast\/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "316-91games": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/22846978691\/h5-bwg-vast\/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "316-behappy": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/22846978691\/h5-bwg-vast\/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "487-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "487-91games": "data-ad-client=ca-pub-5985150674191762",
+    "487-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "487-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "464-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "464-91games": "data-ad-client=ca-pub-5985150674191762",
+    "464-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "464-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "604-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "604-91games": "data-ad-client=ca-pub-5985150674191762",
+    "604-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "604-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "230-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "230-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "230-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "230-91games": "data-ad-client=ca-pub-5985150674191762",
+    "603-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "603-91games": "data-ad-client=ca-pub-5985150674191762",
+    "603-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "603-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "330-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "330-91games": "data-ad-client=ca-pub-5985150674191762",
+    "330-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "330-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "1585-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "1585-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "1585-91games": "data-ad-client=ca-pub-5985150674191762",
+    "1585-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "397-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "397-91games": "data-ad-client=ca-pub-5985150674191762",
+    "397-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "397-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "415-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "415-91games": "data-ad-client=ca-pub-5985150674191762",
+    "415-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "415-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "323-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "323-91games": "data-ad-client=ca-pub-5985150674191762",
+    "323-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "323-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "1696-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "1696-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "1696-91games": "data-ad-client=ca-pub-5985150674191762",
+    "1696-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "831-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "831-91games": "data-ad-client=ca-pub-9717542802261829",
+    "831-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "831-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "1349-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "1349-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "1349-91games": "data-ad-client=ca-pub-9717542802261829",
+    "1349-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "827-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "827-91games": "data-ad-client=ca-pub-9717542802261829",
+    "827-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "827-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "741-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "741-91games": "data-ad-client=ca-pub-9717542802261829",
+    "741-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "741-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "788-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "788-91games": "data-ad-client=ca-pub-9717542802261829",
+    "788-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "788-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "843-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "843-91games": "data-ad-client=ca-pub-9717542802261829",
+    "843-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "843-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "786-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "786-91games": "data-ad-client=ca-pub-9717542802261829",
+    "786-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "786-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "458-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "458-91games": "data-ad-client=ca-pub-9717542802261829",
+    "458-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "458-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "371-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "371-91games": "data-ad-client=ca-pub-9717542802261829",
+    "371-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "371-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "1323-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "1323-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "1323-91games": "data-ad-client=ca-pub-5985150674191762",
+    "1323-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "3553-marketjs": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9271205033",
+    "3553-behappy": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=4889854667",
+    "3553-91games": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9806299103",
+    "3553-cpsense": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=6594334796",
+    "3553-cpsense-cd": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9315884711",
+    "2120-marketjs": "data-ad-client=ca-pub-3615084434427281",
+    "2120-cpsense": "data-ad-client=ca-pub-3615084434427281",
+    "2120-cpsense-cd": "data-ad-client=ca-pub-3615084434427281",
+    "3936-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "3936-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "3936-91games": "data-ad-client=ca-pub-5985150674191762",
+    "3936-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "3936-cpsense-cd": "data-ad-client=ca-pub-5985150674191762",
+    "3937-marketjs": "data-ad-client=ca-pub-9973079271836529",
+    "3937-behappy": "data-ad-client=ca-pub-9973079271836529",
+    "3937-91games": "data-ad-client=ca-pub-9973079271836529",
+    "3937-cpsense": "data-ad-client=ca-pub-9973079271836529",
+    "3937-cpsense-cd": "data-ad-client=ca-pub-9973079271836529",
+    "3938-marketjs": "data-ad-client=ca-pub-9973079271836529",
+    "3938-behappy": "data-ad-client=ca-pub-9973079271836529",
+    "3938-91games": "data-ad-client=ca-pub-9973079271836529",
+    "3938-cpsense": "data-ad-client=ca-pub-9973079271836529",
+    "3938-cpsense-cd": "data-ad-client=ca-pub-9973079271836529",
+    "3939-marketjs": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
+    "3939-behappy": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
+    "3939-91games": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
+    "3939-cpsense": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
+    "3939-cpsense-cd": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
+    "marketjs": "data-ad-client=ca-pub-5396158963872751",
+    "behappy": "data-ad-client=ca-pub-5396158963872751",
+    "91games": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=9348592544",
+    "cpsense": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=6920911773",
+    "cpsense-cd": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=6940252753"
+}

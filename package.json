@@ -1,0 +1,29 @@
+{
+  "name": "presdk2",
+  "version": "1.0.0",
+  "description": "基于Vite和Express的前后端同构应用",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "node server/index.js",
+    "dev:ssr": "node server/index.js",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "vite-express": "^0.11.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.27.0",
+    "vite": "^4.4.9"
+  },
+  "keywords": [
+    "vite",
+    "express",
+    "ssr",
+    "frontend",
+    "backend"
+  ]
+}

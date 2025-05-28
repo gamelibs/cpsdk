@@ -1,0 +1,36 @@
+System.register("chunks:///_virtual/Layout_HUD.ts",["./rollupPluginModLoBabelHelpers.js","cc"],(function(t){var e,n,r,i,o,a,l,u;return{setters:[function(t){e=t.applyDecoratedDescriptor,n=t.inheritsLoose,r=t.initializerDefineProperty,i=t.assertThisInitialized},function(t){o=t.cclegacy,a=t._decorator,l=t.Button,u=t.Component}],execute:function(){var c,s,p,b,y,f,g,_,h;o._RF.push({},"39a54PinEdFeK3Fy7W/PCBC","Layout_HUD",void 0);var D=a.ccclass,d=a.property;t("Layout_UI_HUD",(c=D("Layout_UI_HUD"),s=d(l),p=d(l),b=d(l),c((g=e((f=function(t){function e(){for(var e,n=arguments.length,o=new Array(n),a=0;a<n;a++)o[a]=arguments[a];return e=t.call.apply(t,[this].concat(o))||this,r(e,"btnScenes",g,i(e)),r(e,"btnToggleStats",_,i(e)),r(e,"btnAbout",h,i(e)),e}return n(e,t),e}(u)).prototype,"btnScenes",[s],{configurable:!0,enumerable:!0,writable:!0,initializer:null}),_=e(f.prototype,"btnToggleStats",[p],{configurable:!0,enumerable:!0,writable:!0,initializer:null}),h=e(f.prototype,"btnAbout",[b],{configurable:!0,enumerable:!0,writable:!0,initializer:null}),y=f))||y));o._RF.pop()}}}));
+
+System.register("chunks:///_virtual/module_basic",["./Tablelevels_config.ts","./Tablemain_config.ts","./Tablemusic_config.ts","./UI_Alert_Impl.ts","./Layout_HUD.ts","./UI_HUD.ts","./UI_Tips_Impl.ts","./UI_Waiting_Impl.ts"],(function(){return{setters:[null,null,null,null,null,null,null,null],execute:function(){}}}));
+
+System.register("chunks:///_virtual/Tablelevels_config.ts",["./rollupPluginModLoBabelHelpers.js","cc","./JsonUtil.ts"],(function(t){var e,n,i;return{setters:[function(t){e=t.createClass},function(t){n=t.cclegacy},function(t){i=t.JsonUtil}],execute:function(){n._RF.push({},"f97f4ZEUa9LVo3RkOWcdrhE","Tablelevels_config",void 0),t("Tablelevels_config",function(){function t(){this.data=void 0,this.id=0}return t.prototype.init=function(e){var n=i.get(t.TableName);this.data=n[e],this.id=e},e(t,[{key:"level",get:function(){return this.data.level}},{key:"eliminate",get:function(){return this.data.eliminate}},{key:"target",get:function(){return this.data.target}},{key:"random",get:function(){return this.data.random}}]),t}()).TableName="levels_config",n._RF.pop()}}}));
+
+System.register("chunks:///_virtual/Tablemain_config.ts",["./rollupPluginModLoBabelHelpers.js","cc","./JsonUtil.ts"],(function(t){var n,i,e;return{setters:[function(t){n=t.createClass},function(t){i=t.cclegacy},function(t){e=t.JsonUtil}],execute:function(){i._RF.push({},"9ba81WileJNxbHdMx0TjnpV","Tablemain_config",void 0),t("Tablemain_config",function(){function t(){this.data=void 0,this.id=0}return t.prototype.init=function(n){var i=e.get(t.TableName);this.data=i[n],this.id=n},n(t,[{key:"param",get:function(){return this.data.param}},{key:"content",get:function(){return this.data.content}}]),t}()).TableName="main_config",i._RF.pop()}}}));
+
+System.register("chunks:///_virtual/Tablemusic_config.ts",["./rollupPluginModLoBabelHelpers.js","cc","./JsonUtil.ts"],(function(t){var n,e,i;return{setters:[function(t){n=t.createClass},function(t){e=t.cclegacy},function(t){i=t.JsonUtil}],execute:function(){e._RF.push({},"42fe5+V9kxNv5x2e0SldO8n","Tablemusic_config",void 0),t("Tablemusic_config",function(){function t(){this.data=void 0,this.id=0}return t.prototype.init=function(n){var e=i.get(t.TableName);this.data=e[n],this.id=n},n(t,[{key:"name",get:function(){return this.data.name}},{key:"type",get:function(){return this.data.type}},{key:"cd",get:function(){return this.data.cd}},{key:"content",get:function(){return this.data.content}}]),t}()).TableName="music_config",e._RF.pop()}}}));
+
+System.register("chunks:///_virtual/UI_Alert_Impl.ts",["./rollupPluginModLoBabelHelpers.js","cc","./tgx.ts","./GameUILayers.ts","./ModuleContext.ts","./UIAlert.ts","./Layout_UIAlert.ts"],(function(t){var e,n,l,r,u,o;return{setters:[function(t){e=t.inheritsLoose},function(t){n=t.cclegacy},null,function(t){l=t.GameUILayers},function(t){r=t.ModuleContext},function(t){u=t.UIAlert},function(t){o=t.Layout_UIAlert}],execute:function(){n._RF.push({},"279a6kba+dDnLuXBr6OXobk","UI_Alert_Impl",void 0);var s=t("UIAlert_Impl",function(t){function n(){return t.call(this,"ui_alert/UI_Alert",l.ALERT,o)||this}return e(n,t),n}(u));r.attachImplClass(u,s),n._RF.pop()}}}));
+
+System.register("chunks:///_virtual/UI_HUD.ts",["./rollupPluginModLoBabelHelpers.js","cc","./Layout_HUD.ts","./tgx.ts","./GameUILayers.ts","./UIDef.ts","./UIMgr.ts","./UIController.ts"],(function(t){var n,o,e,s,i,u,c,r;return{setters:[function(t){n=t.inheritsLoose},function(t){o=t.cclegacy,e=t.profiler},function(t){s=t.Layout_UI_HUD},null,function(t){i=t.GameUILayers},function(t){u=t.UI_AboutMe},function(t){c=t.UIMgr},function(t){r=t.UIController}],execute:function(){o._RF.push({},"cf355u7sSFJQLZxhgxMsXJq","UI_HUD",void 0);t("UI_HUD",function(t){function o(){return t.call(this,"ui_hud/UI_HUD",i.HUD,s)||this}n(o,t);var r=o.prototype;return r.getRes=function(){return[]},r.onCreated=function(){var t=this.layout;this.onButtonEvent(t.btnScenes,this.onSceneChange,this),this.onButtonEvent(t.btnToggleStats,this.onToggleStats,this),this.onButtonEvent(t.btnAbout,(function(){c.inst.showUI(u)}))},r.onToggleStats=function(){e.isShowingStats()?e.hideStats():e.showStats()},r.onSceneChange=function(){},r.onDispose=function(){},r.onUpdate=function(){},o}(r));o._RF.pop()}}}));
+
+System.register("chunks:///_virtual/UI_Tips_Impl.ts",["./rollupPluginModLoBabelHelpers.js","cc","./tgx.ts","./GameUILayers.ts","./ModuleContext.ts","./UITips.ts","./Layout_UITips.ts"],(function(t){var s,n,i,e,u,o;return{setters:[function(t){s=t.inheritsLoose},function(t){n=t.cclegacy},null,function(t){i=t.GameUILayers},function(t){e=t.ModuleContext},function(t){u=t.UITips},function(t){o=t.Layout_UITips}],execute:function(){n._RF.push({},"df10bZjpyJJI4x5vy6DWA64","UI_Tips_Impl",void 0);var c=t("UITips_Impl",function(t){function n(){return t.call(this,"ui_tips/UI_Tips",i.ALERT,o)||this}return s(n,t),n}(u));e.attachImplClass(u,c),n._RF.pop()}}}));
+
+System.register("chunks:///_virtual/UI_Waiting_Impl.ts",["./rollupPluginModLoBabelHelpers.js","cc","./tgx.ts","./GameUILayers.ts","./ModuleContext.ts","./UIWaiting.ts","./Layout_UIWaiting.ts"],(function(t){var n,i,e,u,a,o;return{setters:[function(t){n=t.inheritsLoose},function(t){i=t.cclegacy},null,function(t){e=t.GameUILayers},function(t){u=t.ModuleContext},function(t){a=t.UIWaiting},function(t){o=t.Layout_UIWaiting}],execute:function(){i._RF.push({},"0f225BQCHtD2Z1AvkxeFlyk","UI_Waiting_Impl",void 0);var s=t("UIWaiting_Impl",function(t){function i(){return t.call(this,"ui_waiting/UI_Waiting",e.LOADING,o)||this}return n(i,t),i}(a));u.attachImplClass(a,s),i._RF.pop()}}}));
+
+(function(r) {
+  r('virtual:///prerequisite-imports/module_basic', 'chunks:///_virtual/module_basic'); 
+})(function(mid, cid) {
+    System.register(mid, [cid], function (_export, _context) {
+    return {
+        setters: [function(_m) {
+            var _exportObj = {};
+
+            for (var _key in _m) {
+              if (_key !== "default" && _key !== "__esModule") _exportObj[_key] = _m[_key];
+            }
+      
+            _export(_exportObj);
+        }],
+        execute: function () { }
+    };
+    });
+});

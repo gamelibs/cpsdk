@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+
+  <title>SnipingAliens</title>
+
+  <!--http://www.html5rocks.com/en/mobile/mobifying/-->
+  <meta name="viewport"
+    content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1,minimal-ui=true" />
+
+  <!--https://developer.apple.com/library/safari/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html-->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+
+  <!-- force webkit on 360 -->
+  <meta name="renderer" content="webkit" />
+  <meta name="force-rendering" content="webkit" />
+  <!-- force edge on IE -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="msapplication-tap-highlight" content="no">
+
+  <!-- force full screen on some browser -->
+  <meta name="full-screen" content="yes" />
+  <meta name="x5-fullscreen" content="true" />
+  <meta name="360-fullscreen" content="true" />
+
+  <!--fix fireball/issues/3568 -->
+  <!--<meta name="browsermode" content="application">-->
+  <meta name="x5-page-mode" content="app">
+
+  <!--<link rel="apple-touch-icon" href=".png" />-->
+  <!--<link rel="apple-touch-icon-precomposed" href=".png" />-->
+
+  <link rel="stylesheet" type="text/css" href="style.css" />
+
+</head>
+
+<body>
+  <div id="GameDiv" cc_exact_fit_screen="true">
+    <div id="Cocos3dGameContainer">
+      <canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="99"></canvas>
+    </div>
+  </div>
+
+
+  <!-- Polyfills bundle. -->
+
+  <script src="src/polyfills.bundle.js" charset="utf-8"> </script>
+
+
+  <!-- SystemJS support. -->
+  <script src="src/system.bundle.js" charset="utf-8"> </script>
+
+  <!-- Import map -->
+  <script src="src/import-map.json" type="systemjs-importmap" charset="utf-8"> </script>
+
+  <!-- <script>
+    System.import('./index.js').catch(function (err) { console.error(err); })
+  </script> -->
+
+  <script>
+    // adInstance = null
+    // 动态加载外部脚本的方法
+    loadScript = function (url) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load script: ${url}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    // 加载 PRESDK3.0.1.js，然后启动项目
+    // loadScript('../../src/cpsdk1.0.min.js')
+    loadScript('https://cpsense.douyougame.com/sdk/cpsdk1.0.min.js')
+      .then(() => {
+        console.log('PRESDK3.0.1.js loaded successfully');
+        // 初始化广告 SDK
+        var adSdkConfig = {
+          el: document.querySelector("GameDiv"),
+          client: 'cpsense-cd',
+          is_test: true
+        };
+        var adInstance = new adSdk(adSdkConfig);
+        window.adInstance = adInstance;
+        window.CPSenseShowAd = {
+          showAd: function (type) {
+            return new Promise((resolve, reject) => {
+              if (type === 'interstitial') {
+                adInstance.interstitialAd({
+                  beforeAd: function () {
+                    console.log("The ad starts playing")
+                  },
+                  afterAd: function () {
+                    console.log("The ad ends playing")
+                    resolve({
+                      result: 'success',
+                      message: 'Interstitial ad closed'
+                    });
+                  },
+                  error: function (n) {
+                    console.log("error", n);
+                    reject(new Error('Interstitial ad error'));
+                  }
+                });
+              } else if (type === 'rewarded') {
+                adInstance.rewardAd({
+                  beforeAd: function () {
+                    console.log("The ad starts playing, and the game should pause."),
+                      window.youxi.SoundManager.pauseAll(),
+                      window.youxi.GameManager.pauseAll();
+                  },
+                  adDismissed: function () {
+                    console.log("Player dismissed the ad before completion."),
+                      window.youxi.SoundManager.resumeAll(),
+                      window.youxi.GameManager.resumeAll();
+                    reject(new Error('Interstitial ad error'));
+                  },
+                  adViewed: function () {
+                    console.log("Ad was viewed and closed."),
+                      window.youxi.SoundManager.resumeAll(),
+                      window.youxi.GameManager.resumeAll();
+                    resolve({
+                      result: 'success',
+                      message: 'Interstitial ad closed'
+                    });
+                  },
+                  error: function (n) {
+                    console.log("error", n);
+                    window.youxi.SoundManager.resumeAll();
+                    window.youxi.GameManager.resumeAll();
+                    reject(new Error('Interstitial ad error'));
+                  }
+                })
+              } else {
+                reject(new Error('Invalid ad type'));
+              }
+            });
+          }
+        };
+
+        console.log('AD initialized successfully');
+
+
+      })
+      .then(() => {
+        // 加载项目主入口
+        return System.import('./index.js');
+      })
+      .catch(err => {
+        console.error('Error during initialization:', err);
+      });
+
+
+    // 外部广告调用
+    window.showAd = function (type) {
+      type = type.toLowerCase();
+      return new Promise((resolve, reject) => {
+
+        window.CPSenseShowAd.showAd(type)
+          .then((res) => {
+            // 为游戏返回广告结果
+            console.log(res);
+            resolve(res);
+          })
+          .catch((err) => {
+            console.log(err);
+            reject(err);
+          });
+      });
+
+    };
+
+    // 回调测试
+    function TopCallback() {
+
+      //sound
+      if (window.__woso.SoundManager.isSound) {
+        window.youxi.SoundManager.resumeAll();
+      } else {
+        window.youxi.SoundManager.pauseAll();
+      }
+
+    }
+  </script>
+
+</body>
+
+</html>
