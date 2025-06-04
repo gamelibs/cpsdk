@@ -9,7 +9,8 @@
     "server": "node server/index.js",
     "dev:ssr": "node server/index.js",
     "build": "vite build",
-    "serve": "vite preview"
+    "serve": "vite preview",
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",

@@ -8,6 +8,7 @@ class adSdk {
         this.pubid = new URLSearchParams(document.location.search).get("pubid");
         this.ret = new URLSearchParams(document.location.search).get("ret");
         this.is_ad_test = new URLSearchParams(document.location.search).get("vb") === "beta";
+        this.dev_name = new URLSearchParams(document.location.search).get("dev") || this.config.client || 'default';
         this.gamePlayTimer = null;
         this._insert_tagmanager();
 
@@ -48,7 +49,11 @@ class adSdk {
         }
 
         this.is_adsense = null;//是否adsense广告
-        this.ads_code = null;
+        this.is_gpt = false; // 是否gpt广告
+        this.is_ima = false; // 是否adx广告
+        this.ads_code = null; // adsense广告代码
+        this.gpt_code = null; // gpt广告代码
+        this.ima_code = null; // adx广告代码
         this.adType = null;
         this.is_first = true;
         this.interstitial_requests_count = 0; // 插页广告请求次数
@@ -82,6 +87,8 @@ class adSdk {
             adViewed: () => { },
             adDismissed: () => { }
         };
+
+        this.adsType = { ADSENSE: 'adsense', IMA: 'ima', GPT: 'gpt' }; // 广告类型
 
         // ads事件流程 
         this._eventAds.on('ready', (param1, param2) => {
@@ -153,7 +160,32 @@ class adSdk {
         })
 
         this._initAds();
-      
+        // 初始化排名
+        // if (config) {
+        //     this._ajax("https://api.douyougame.com/interest/ranking/" + this.gameid + "/" + this.pubid, "GET", "").then(A => {
+        //         // this._output_data(A)
+        //     }).catch(error => {
+        //         console.error("Error fetching data:", error);
+        //     });
+
+        // }
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = reject;
+                document.head.appendChild(s);
+            });
+        }
+
+        loadScript('https://localhost:5173/src/break.js')
+            .then((res) => {
+                abc();
+            })
+            .catch(err => {
+                console.error('脚本加载失败', err);
+            });
     }
 
 
@@ -163,32 +195,45 @@ class adSdk {
 
         // type_1: adsense
         // type_2: adx
-        // type_3: adx+adsens
+        // type_3: gpt
 
-        let dev = this.config.client;
+        // let dev = this.config.client;
 
-        let code = ads_list[this.pubid + '-' + dev] || ads_list[dev] || ads_list['default_ads'];
-
-
+        let code = ads_list[this.pubid + '-' + this.dev_name] || ads_list[this.dev_name] || ads_list['default_ads'];
 
         if (code) {
-            this.is_adsense = code.startsWith('data-ad-client') ? true : false;
-            if (this.is_adsense) {
-                this._openAdsense(code);
-            } else {
-                this._openAdx(code);
+            // this.is_adsense = code.startsWith('data-ad-client') ? true : false;
+            if (code.startsWith('data-ad-client')) {
+                this.adType = this.adsType.ADSENSE;
+                this.is_adsense = true;
+                this.ads_code = code; // adsense广告代码
+                this._openAdsense();
+                return;
             }
-        } else {
-            this.is_adsense = false; // 保底adx
-            this._openAdx(vast_url);
-        }
 
+            if (code.startsWith('https://pubads.g.doubleclick.net/gampad/ads?iu=')) {
+                this.adType = this.adsType.IMA;
+                this.is_gpt = true; // adx
+                this.ima_code = code; // adx广告代码
+                this._openIma();
+                return;
+            }
+
+            if (/^\/\d+\/[^\/]+$/.test(code)) {
+                this.adType = this.adsType.GPT;
+                this.gpt_code = code;
+                this._openGPT();
+                return;
+            }
+
+            this._openIma(vast_url);
+
+        }
 
     }
 
-    _openAdsense(code) {
+    _openAdsense() {
 
-        this.adType = 'adsense';
         const adsense_Script = document.createElement("script");
         adsense_Script.async = true;
         adsense_Script.setAttribute('data-ad-frequency-hint', '30s');
@@ -197,7 +242,7 @@ class adSdk {
 
         if (this.is_ad_test) { adsense_Script.setAttribute('data-adbreak-test', 'on') };
 
-        let attr_arr = code.split(',');
+        let attr_arr = this.ads_code.split(',');
         for (let i = 0; i < attr_arr.length; i++) {
             adsense_Script.setAttribute(attr_arr[i].split('=')[0], attr_arr[i].split('=')[1]);
         }
@@ -232,9 +277,8 @@ class adSdk {
 
     }
 
-    _openAdx(code) {
-        this.adType = 'adx';
-        this.ads_code = code;
+    _openIma(code) {
+
 
         let adx_script = document.createElement("script");
         adx_script.type = "text/javascript";
@@ -252,6 +296,87 @@ class adSdk {
         adx_script.onerror = () => {
             this._eventAds.emit('error', "error", "loaded-adx");
             this.__sdklog("adx load error");
+        }
+    }
+
+    _openGPT() {
+        let gpt_script = document.createElement("script");
+        gpt_script.type = "text/javascript";
+        gpt_script.async = true;
+        gpt_script.crossOrigin = "anonymous";
+        gpt_script.src = "//securepubads.g.doubleclick.net/tag/js/gpt.js";
+        document.head.appendChild(gpt_script);
+
+        gpt_script.onload = () => {
+            let self = this;
+
+            self.adSdk_isReady = true;
+            self._eventAds.emit('ready', "gptSdk_isReady:true", "gpt");
+
+            window.googletag = window.googletag || { cmd: [] };
+
+            self.rewardPayload = null;
+
+            googletag.cmd.push(() => {
+
+                googletag.pubads().addEventListener("rewardedSlotReady", (event) => {
+                    event.makeRewardedVisible();
+                    self._eventAds.emit('beforeAd', "beforeAd", "pause");
+                    self.gpt_callback.beforeAd();
+                });
+
+                googletag.pubads().addEventListener("rewardedSlotClosed", () => {
+                    if (self.rewardPayload) {
+                        // console.log("广告播放完成关闭");
+                        if (self.gpt_type === 'rewardedAd') {
+                            self._eventAds.emit('adViewed', "adViewed", "completed");
+                            self.gpt_callback.adViewed();
+                        } else {
+                            self._eventAds.emit('afterAd', "afterAd", "resume");
+                            self.gpt_callback.afterAd();
+                        }
+                       
+                        self.rewardPayload = null;
+                    } else {
+                        // console.log("广告播放未完成关闭");
+                        if (self.gpt_type === 'rewardedAd') {
+                            self._eventAds.emit('adDismissed', "adDismissed", "skipped");
+                            self.gpt_callback.adDismissed();
+                        } else {
+                            self._eventAds.emit('afterAd', "afterAd", "resume");
+                            self.gpt_callback.afterAd();
+                        }
+                       
+                    }
+
+                    if (self.rewardedSlot) {
+                        console.log("adclose");
+                        googletag.destroySlots([self.rewardedSlot]);
+                        self.rewardedSlot = null;
+                    }
+                });
+
+                googletag.pubads().addEventListener("rewardedSlotGranted", (event) => {
+                    self.rewardPayload = event.payload;
+                    console.log("Reward granted:", self.rewardPayload);
+                });
+
+                googletag.pubads().addEventListener("slotRenderEnded", (event) => {
+                    if (event.slot === self.rewardedSlot && event.isEmpty) {
+                        console.log("No ad returned for rewarded ad slot.");
+                        self._eventAds.emit('error', 'error', "No ad returned for rewarded ad slot.");
+                    }
+                });
+
+                googletag.enableServices();
+
+            });
+
+        }
+
+        gpt_script.onerror = () => {
+            this._eventAds.emit('error', "error", "loaded-gpt");
+            this.__sdklog("gpt load error");
         }
     }
 
@@ -491,13 +616,33 @@ class adSdk {
 
         const adsRequest = new google.ima.AdsRequest();
         adsRequest.adTagUrl = this.is_ad_test ? self._getTestAdxUrl() :
-            (self.ads_code + self._generateUniqueCorrelator());
+            (self.ima_code + self._generateUniqueCorrelator());
         console.log('adxRequest=', self.videoWidth, self.videoHeight);
         adsRequest.linearAdSlotWidth = self.videoWidth;
         adsRequest.linearAdSlotHeight = self.videoHeight;
 
 
         self.adsLoader.requestAds(adsRequest);
+    }
+
+    _showGPT() {
+
+        let self = this;
+        googletag.cmd.push(() => {
+            // 创建新的广告位
+            self.rewardedSlot = googletag.defineOutOfPageSlot(
+                self.gpt_code,
+                googletag.enums.OutOfPageFormat.REWARDED,
+            );
+
+            if (self.rewardedSlot) {
+                self.rewardedSlot.addService(googletag.pubads());
+                googletag.display(self.rewardedSlot);
+            } else {
+                console.error("Failed to create rewarded ad slot.");
+            }
+        });
+
     }
 
     // 插页
@@ -540,7 +685,7 @@ class adSdk {
 
         // 请求广告超时
         self.req_ad_timeout = true;
-        if (self.is_adsense) {
+        if (self.adType === self.adsType.ADSENSE) {
 
             adBreak({
                 type: self.is_first ? 'start' : ["start", "pause", "next", "browse"][Math.floor(Math.random() * 4)],
@@ -568,7 +713,8 @@ class adSdk {
 
                 }
             });
-        } else {
+        }
+        else if (self.adType === self.adsType.IMA) {
 
             self.adx_type = 'interstitialAd';
             self.adx_callback = callback;
@@ -576,6 +722,10 @@ class adSdk {
             self._showAdx();
 
 
+        } else if (self.adType === self.adsType.GPT) {
+            self.gpt_type = 'interstitialAd';
+            self.gpt_callback = callback;
+            self._showGPT();
         }
 
         setTimeout(() => {
@@ -626,7 +776,7 @@ class adSdk {
         // 请求广告超时
         self.req_ad_timeout = true;
 
-        if (self.is_adsense) {
+        if (self.adType === self.adsType.ADSENSE) {
             adBreak({
                 type: 'reward',
                 beforeAd() {
@@ -655,11 +805,15 @@ class adSdk {
                     }
                 }
             });
-        } else {
+        } else if (self.adType === self.adsType.IMA) {
             self.adx_type = 'rewardedAd';
             self.adx_callback = callback;
 
             self._showAdx();
+        } else if (self.adType === self.adsType.GPT) {
+            self.gpt_type = 'rewardedAd';
+            self.gpt_callback = callback;
+            self._showGPT();
         }
 
         setTimeout(() => {
@@ -760,7 +914,7 @@ class adSdk {
             gtag('set', 'cookie_flags', 'SameSite=None;Secure');
             gtag('config', 'G-NL2943ZRFH', {
                 game_id: self.gameid,
-                'dev_name': self.config.client
+                'dev_name': self.dev_name//self.config.client
             });
         };
 
@@ -905,6 +1059,7 @@ const backup_adx_urls = {
 
 const vast_url = 'https://pubads.g.doubleclick.net/gampad/ads?iu=/22149012983/h5-bwg-vast/400x300-1180marketjs-id00032-bwg&description_url=https%3A%2F%2Fwww.likebox.xyz&tfcd=0&npa=0&sz=400x300&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=';
 const ads_list = {
+    "gpt": "/22639388115/rewarded_web_example",
     "default_ads": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=4449826950",
     "1312-marketjs": "data-ad-client=ca-pub-3615084434427281",
     "1313-marketjs": "data-ad-client=ca-pub-3615084434427281",

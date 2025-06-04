@@ -20,7 +20,8 @@ const ACTIVE_CLASS = 'active';
 // 初始化广告
 const adSdkConfig = {
   el: document.querySelector("#adcontent"),
-  client: 'cpsense',
+  // client: 'cpsense',
+  client: 'gpt',
   is_test: true
 }
 
