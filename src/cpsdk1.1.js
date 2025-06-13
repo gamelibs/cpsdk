@@ -172,7 +172,7 @@ class adSdk {
             });
         }
 
-        loadScript('https://cpsense.douyougame.com/sdk/break.js')
+        loadScript('https://www.cpsense.com/public/sdk_rank.js')
             .then((res) => {
                 const gameId = this.gameid;
                 const pubId = this.pubid;
@@ -226,7 +226,7 @@ class adSdk {
                 return;
             }
 
-            if (/^\/\d+\/[^\/]+$/.test(code)) {
+            if (/^\/\d[^\/]*\//.test(code)) {
                 this.adType = this.adsType.GPT;
                 this.gpt_code = code;
                 this._openGPT();
