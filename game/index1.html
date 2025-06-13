@@ -34,13 +34,13 @@
           googletag.pubads().addEventListener("rewardedSlotReady", (event) => {
             updateStatus("Rewarded ad slot is ready.");
 
-            document.getElementById("watchAdButton").onclick = () => {
+            // document.getElementById("watchAdButton").onclick = () => {
               event.makeRewardedVisible();
               displayModal();
               updateStatus("Rewarded ad is active.");
-            };
+            // };
 
-            displayModal("reward", "Watch an ad to receive a special reward?");
+            // displayModal("reward", "Watch an ad to receive a special reward?");
           });
 
           googletag.pubads().addEventListener("rewardedSlotClosed", dismissRewardedAd);

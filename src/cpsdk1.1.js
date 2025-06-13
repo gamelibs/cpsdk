@@ -160,15 +160,8 @@ class adSdk {
         })
 
         this._initAds();
-        // 初始化排名
-        // if (config) {
-        //     this._ajax("https://api.douyougame.com/interest/ranking/" + this.gameid + "/" + this.pubid, "GET", "").then(A => {
-        //         // this._output_data(A)
-        //     }).catch(error => {
-        //         console.error("Error fetching data:", error);
-        //     });
 
-        // }
+        // 初始化排名
         function loadScript(src) {
             return new Promise((resolve, reject) => {
                 const s = document.createElement('script');
@@ -179,12 +172,26 @@ class adSdk {
             });
         }
 
-        loadScript('https://localhost:5173/src/break.js')
+        loadScript('https://cpsense.douyougame.com/sdk/break.js')
             .then((res) => {
-                abc();
+                const gameId = this.gameid;
+                const pubId = this.pubid;
+                if (gameId && pubId) {
+
+                    this._ajax("https://api.douyougame.com/interest/ranking/" + gameId + "/" + pubId, "GET", "").then(A => {
+                        break_abc(A)
+                    }).catch(error => {
+                        console.error("Error fetching data:", error);
+                        break_abc({ data: [], link: 'https://www.likebox.top' })
+                    });
+
+                } else {
+                    break_abc({ data: [], link: 'https://www.likebox.top' })
+                }
             })
             .catch(err => {
-                console.error('脚本加载失败', err);
+
+                console.error('break load', err);
             });
     }
 
@@ -335,7 +342,7 @@ class adSdk {
                             self._eventAds.emit('afterAd', "afterAd", "resume");
                             self.gpt_callback.afterAd();
                         }
-                       
+
                         self.rewardPayload = null;
                     } else {
                         // console.log("广告播放未完成关闭");
@@ -346,7 +353,7 @@ class adSdk {
                             self._eventAds.emit('afterAd', "afterAd", "resume");
                             self.gpt_callback.afterAd();
                         }
-                       
+
                     }
 
                     if (self.rewardedSlot) {

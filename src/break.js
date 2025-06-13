@@ -1,5 +1,5 @@
-function abc (data){
-    // if (data.link === '' && data.data.length === 0) { return }
+function break_abc (data){
+    if (data.link === '' && data.data.length === 0) { return }
     data = data || {
         data: [],
     };
