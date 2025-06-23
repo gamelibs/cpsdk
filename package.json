@@ -6,11 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node server/index.js",
-    "dev:ssr": "node server/index.js",
     "build": "vite build",
-    "serve": "vite preview",
-    "start": "node server.js"
+    "serve": "vite preview"
   },
   "dependencies": {
     "express": "^4.18.2",

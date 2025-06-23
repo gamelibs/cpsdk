@@ -1,4 +1,7 @@
+工具     功能. 是否混淆. 推荐场景
+terser 压缩 ✔️ 仅压缩，不混淆 可控
 
+javascript-obfuscator 混淆 + 保护 默认混淆 ❌ 不适合只压缩的场景
 
 
 ### 方案2：使用Terser进行代码压缩
@@ -8,10 +11,10 @@ Terser是一个流行的JavaScript压缩工具：
  - npm install -g terser
  现在我们来使用Terser压缩您的JavaScript代码： 
 
- terser /Users/vidar/ovo/presdk2/src/cpsdk1.0.js -o /Users/vidar/ovo/presdk2/src/cpsdk1.0.min.js -c -m
+ terser /Users/vidar/ovo/presdk2/src/cpsdk1.1.js -o /Users/vidar/ovo/presdk2/src/cpsdk1.1.min.js -c -m
 
  让我们验证压缩文件是否已经创建成功： 
- ls -la /Users/vidar/ovo/presdk2/src/cpsdk1.0*.js
+ ls -la /Users/vidar/ovo/presdk2/src/cpsdk1.1*.js
 
  ### 方案3：使用更强的混淆选项
 

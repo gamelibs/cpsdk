@@ -1,7 +1,16 @@
+/**
+ * CPSDK 1.1
+ * 2025-06-16
+ * 配置:3种广告
+ * URL?vb=beta开始测试广告
+ * 可以不回调beforeAd()
+ * 只有adsense有首次判定is_first
+ */
+
 class adSdk {
     constructor(config) {
         this.config = config;
-        this.adSdk_isReady = false;
+        this.adSdk_isReady = true;
 
         window.dataLayer = window.dataLayer || [];
         this.gameid = new URLSearchParams(document.location.search).get("gameid");
@@ -204,12 +213,10 @@ class adSdk {
         // type_2: adx
         // type_3: gpt
 
-        // let dev = this.config.client;
-
         let code = ads_list[this.pubid + '-' + this.dev_name] || ads_list[this.dev_name] || ads_list['default_ads'];
 
         if (code) {
-            // this.is_adsense = code.startsWith('data-ad-client') ? true : false;
+
             if (code.startsWith('data-ad-client')) {
                 this.adType = this.adsType.ADSENSE;
                 this.is_adsense = true;
@@ -272,7 +279,7 @@ class adSdk {
                 if (!isTimeOut) {
                     this._eventAds.emit('error', "timeout", "noReady-adsense");
                 }
-            }, 5000);
+            }, 10000);
         }
 
         adsense_Script.onerror = (error) => {
@@ -439,23 +446,6 @@ class adSdk {
     _onAdsManagerLoaded(adsManagerLoadedEvent) {
         let self = this;
 
-        // function showAdContainer() {
-        //     const el = document.getElementById('adx-mainContainer');
-        //     if (el) {
-        //         el.style.display = 'flex';
-        //         el.style.zIndex = '9999';
-        //     }
-        // }
-
-        // function hideAdContainer() {
-        //     const el = document.getElementById('adx-mainContainer');
-        //     if (el) {
-        //         el.style.display = 'none';
-        //         el.style.zIndex = '-9999';
-        //     }
-        // }
-
-
         const adsRenderingSettings = new google.ima.AdsRenderingSettings();
         adsRenderingSettings.useCustomPlaybackUI = false;
 
@@ -574,7 +564,6 @@ class adSdk {
     _showAdx() {
 
         let self = this;
-        self.is_first = false;
 
         if (self.adsManager) {
             self.adsManager.destroy();
@@ -586,7 +575,7 @@ class adSdk {
             self.adsLoader = null;
         }
 
-        this._createAdxDom();
+        self._createAdxDom();
 
 
         self.adContainer = document.getElementById('adx-adContainer');
@@ -622,9 +611,9 @@ class adSdk {
 
 
         const adsRequest = new google.ima.AdsRequest();
-        adsRequest.adTagUrl = this.is_ad_test ? self._getTestAdxUrl() :
+        adsRequest.adTagUrl = self.is_ad_test ? self._getTestAdxUrl("Preroll") :
             (self.ima_code + self._generateUniqueCorrelator());
-        console.log('adxRequest=', self.videoWidth, self.videoHeight);
+        // console.log('adxRequest=', self.videoWidth, self.videoHeight);
         adsRequest.linearAdSlotWidth = self.videoWidth;
         adsRequest.linearAdSlotHeight = self.videoHeight;
 
@@ -635,10 +624,11 @@ class adSdk {
     _showGPT() {
 
         let self = this;
+        let gpt_code = self.is_ad_test ? self._getTestAdxUrl("gpt") : self.gpt_code;
         googletag.cmd.push(() => {
             // 创建新的广告位
             self.rewardedSlot = googletag.defineOutOfPageSlot(
-                self.gpt_code,
+                gpt_code,
                 googletag.enums.OutOfPageFormat.REWARDED,
             );
 
@@ -655,9 +645,12 @@ class adSdk {
     // 插页
     _showInterstitialAd(callback) {
         let self = this;
-        if (!self.adSdk_isReady) return;
+
         //1秒内禁止重复,防抖
-        if (self.req_ad_stabilization) return;
+        if (self.req_ad_stabilization) {
+            callback.error("frequencyCapped");
+            return;
+        }
         setTimeout(() => {
             console.log('^^^^^^^^^req_ad_stabilization^^^^^^^^^^^^');
             self.req_ad_stabilization = false;
@@ -700,7 +693,7 @@ class adSdk {
 
                     self.req_ad_timeout = false;
                     self._eventAds.emit('beforeAd', "interstitialAd", "beforeAd");
-                    callback.beforeAd();
+                    if (typeof callback.beforeAd === 'function') callback.beforeAd();
                 },
                 afterAd() {
 
@@ -747,20 +740,23 @@ class adSdk {
     // 激励
     _showRewardAd(callback) {
         let self = this;
-        if (!self.adSdk_isReady) return;
-        self._eventAds.emit('reward', "rewardAd");
 
-        if (self.req_ad_stabilization) return;
+        if (self.req_ad_stabilization) {
+            callback.error("frequencyCapped");
+            return;
+        };
+
         setTimeout(() => {
             self.req_ad_stabilization = false;
         }, 1000);
 
         self.req_ad_stabilization = true;
 
+        self._eventAds.emit('reward', "rewardAd");
+
         const now = Date.now();
         if (!this.reward_time_start) {
             this.reward_time_start = now;
-
         }
 
         // 如果超过30秒，重置计数器
@@ -790,7 +786,7 @@ class adSdk {
                     self.req_ad_timeout = false;
 
                     self._eventAds.emit('beforeAd', "rewardedAd", 'beforeAd');
-                    callback.beforeAd();
+                    if (typeof callback.beforeAd === 'function') callback.beforeAd();
                 },
                 beforeReward(showAdFn) { showAdFn(); },
                 adDismissed() {
@@ -983,12 +979,12 @@ class adSdk {
 
     }
 
-    _getTestAdxUrl() {
-        // 返回一个测试的ADX URL
-        const adx_url = backup_adx_urls['Preroll'] + Date.now();
-        console.log('Using test ADX URL:', adx_url);
+    _getTestAdxUrl(type) {
+        // 返回一个测试的beta URL
+        const beta_url = backup_beta_urls[type];// + Date.now();
+        console.log('Using testURL:', beta_url);
 
-        return adx_url
+        return beta_url
     }
     _generateUniqueCorrelator() {
         return Date.now();//Math.random().toString(36).substr(2, 9);// +
@@ -1021,7 +1017,7 @@ class adSdk {
 
 }
 
-const backup_adx_urls = {
+const backup_beta_urls = {
 
     //单行内嵌线性
     'Inline': 'https://pubads.g.doubleclick.net/gampad/ads?' +
@@ -1059,6 +1055,8 @@ const backup_adx_urls = {
         'adtest=on&' +
         'ad_type=video&' +
         'correlator=',
+    //gpt测试
+    "gpt": "/22639388115/rewarded_web_example",
 
 }
 
@@ -1066,7 +1064,6 @@ const backup_adx_urls = {
 
 const vast_url = 'https://pubads.g.doubleclick.net/gampad/ads?iu=/22149012983/h5-bwg-vast/400x300-1180marketjs-id00032-bwg&description_url=https%3A%2F%2Fwww.likebox.xyz&tfcd=0&npa=0&sz=400x300&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=';
 const ads_list = {
-    "gpt": "/22639388115/rewarded_web_example",
     "default_ads": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=4449826950",
     "1312-marketjs": "data-ad-client=ca-pub-3615084434427281",
     "1313-marketjs": "data-ad-client=ca-pub-3615084434427281",
