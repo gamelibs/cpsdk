@@ -928,6 +928,7 @@ class adSdk {
             });
         } else {
             if (self.is_first) {
+
                 window.adBreak({
                     type: 'preroll',
                     beforeAd() {
@@ -945,6 +946,10 @@ class adSdk {
 
                         if (breakStatus !== 'viewed') {
                             if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
+                        } else {
+
+                            self._eventAds.emit('afterAd', "interstitialAd", "afterAd");
+                            if (typeof self.adsense_callback.afterAd === 'function') self.adsense_callback.afterAd();
                         }
 
                     }

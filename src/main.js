@@ -106,9 +106,9 @@ const showAd = (type) => {
   if (true) {
     if (type === "rewardAd") {
       adInstance.rewardAd({
-        // beforeAd() {
-        //   console.log('Prepare for the ad. Mute and pause the game flow.');
-        // },
+        beforeAd() {
+          console.log('Prepare for the ad. Mute and pause the game flow.');
+        },
         adDismissed() {
           console.log('Player dismissed the ad before completion.');
         },
@@ -121,9 +121,9 @@ const showAd = (type) => {
       });
     } else {
       adInstance.interstitialAd({
-        // beforeAd() {
-        //   console.log('Prepare for the ad. Mute and pause the game flow.');
-        // },
+        beforeAd() {
+          console.log('Prepare for the ad. Mute and pause the game flow.');
+        },
         afterAd() {
           console.log('Ad show normally,ad has been closed, Resume the game and un-mute the sound.');
         },
