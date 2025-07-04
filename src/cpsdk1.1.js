@@ -1,10 +1,11 @@
 /**
  * CPSDK 1.1
- * 2025-06-16
+ * 2025-06-23
  * 配置:3种广告
  * URL?vb=beta开始测试广告
  * 可以不回调beforeAd()
  * 只有adsense有首次判定is_first
+ * 修改首次广告为preroll(20250703)
  */
 
 class adSdk {
@@ -34,14 +35,14 @@ class adSdk {
             },
             on(eventName, callback) {
                 if (!this.listeners[eventName]) {
-                    console.error(`Event ${eventName} does not exist.`);
+
                     return;
                 }
                 this.listeners[eventName].push(callback);
             },
             emit(eventName, ...args) {
                 if (!this.listeners[eventName]) {
-                    console.error(`Event ${eventName} does not exist.`);
+
                     return;
                 }
                 this.listeners[eventName].forEach(callback => {
@@ -50,7 +51,7 @@ class adSdk {
             },
             off(eventName, callback) {
                 if (!this.listeners[eventName]) {
-                    console.error(`Event ${eventName} does not exist.`);
+
                     return;
                 }
                 this.listeners[eventName] = this.listeners[eventName].filter(cb => cb !== callback);
@@ -64,6 +65,9 @@ class adSdk {
         this.gpt_code = null; // gpt广告代码
         this.ima_code = null; // adx广告代码
         this.adType = null;
+        this.adx_type = null; // adx广告类型
+        this.gpt_type = null; // gpt广告类型
+        this.adsense_type = null; // adsense广告类型
         this.is_first = true;
         this.interstitial_requests_count = 0; // 插页广告请求次数
         this.interstitial_req_frequency = false; // 插页广告请求频率
@@ -88,7 +92,9 @@ class adSdk {
         this.videoHeight = null;
         this.adsRequest = null;
         this.adx_isLoaded = false;
-        // Initialize adx_callback with empty methods to avoid "undefined is not a function" errors
+        this.adxLoadTimeout = null; // ADX广告加载超时计时器
+
+
         this.adx_callback = {
             error: () => { },
             beforeAd: () => { },
@@ -96,6 +102,22 @@ class adSdk {
             adViewed: () => { },
             adDismissed: () => { }
         };
+
+        this.gpt_callback = {
+            error: () => { },
+            beforeAd: () => { },
+            afterAd: () => { },
+            adViewed: () => { },
+            adDismissed: () => { }
+        };
+        this.adsense_callback = {
+            error: () => { },
+            beforeAd: () => { },
+            afterAd: () => { },
+            adViewed: () => { },
+            adDismissed: () => { }
+        };
+
 
         this.adsType = { ADSENSE: 'adsense', IMA: 'ima', GPT: 'gpt' }; // 广告类型
 
@@ -105,39 +127,39 @@ class adSdk {
         })
 
         this._eventAds.on('interstitial', (param1) => {
-            gtag('event', 'game_interstitialad', { send: 'sdk', 'ad_type': this.adType });
+            window.gtag('event', 'game_interstitialad', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog(param1, this.adType);
         })
 
         this._eventAds.on('reward', (param1) => {
-            gtag('event', 'game_reward', { send: 'sdk', 'ad_type': this.adType });
+            window.gtag('event', 'game_reward', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog(param1, this.adType);
         })
 
         this._eventAds.on('beforeAd', (param1, param2) => {
 
             if (this.adx_type === "rewardedAd" || param1 === "rewardedAd") {
-                gtag('event', 'game_reward_open', { send: 'sdk', 'ad_type': this.adType });
+                window.gtag('event', 'game_reward_open', { send: 'sdk', 'ad_type': this.adType });
 
             } else {
 
-                gtag('event', 'game_interstitialad_open', { send: 'sdk', 'ad_type': this.adType });
+                window.gtag('event', 'game_interstitialad_open', { send: 'sdk', 'ad_type': this.adType });
             }
             this.__sdklog2("*******adevent**********", param1, param2, this.adType);
         })
 
         this._eventAds.on('adDismissed', (param1) => {
-            gtag('event', 'game_reward_dismissed', { send: 'sdk', 'ad_type': this.adType });
+            window.gtag('event', 'game_reward_dismissed', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog2("*******adevent**********", param1, this.adType);
         })
 
         this._eventAds.on('adViewed', (param1) => {
-            gtag('event', 'game_reward_viewed', { send: 'sdk', 'ad_type': this.adType });
+            window.gtag('event', 'game_reward_viewed', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog2("*******adevent**********", param1, this.adType);
         })
 
         this._eventAds.on('afterAd', (param1, param2) => {
-            gtag('event', 'game_interstitialad_viewed', { send: 'sdk', 'ad_type': this.adType });
+            window.gtag('event', 'game_interstitialad_viewed', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog2("*******adevent**********", param1, param2, this.adType);
         })
 
@@ -153,13 +175,13 @@ class adSdk {
                 case 'frequencyrewardAd':
                 case 'frequencyinterstitialAd':
                 case 'other':
-                    gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
+                    window.gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
                     break;
                 case 'viewed':
                 case 'dismissed':
                     break;
                 default:
-                    gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
+                    window.gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
                     break;
             }
             if (param2 !== 'viewed' && param2 !== 'dismissed') {
@@ -188,19 +210,21 @@ class adSdk {
                 if (gameId && pubId) {
 
                     this._ajax("https://api.douyougame.com/interest/ranking/" + gameId + "/" + pubId, "GET", "").then(A => {
-                        break_abc(A)
+
+                        if (typeof break_abc === 'function') break_abc(A);
+
                     }).catch(error => {
-                        console.error("Error fetching data:", error);
-                        break_abc({ data: [], link: 'https://www.likebox.top' })
+                        console.log("Error fetching data:", error);
+                        if (typeof break_abc === 'function') break_abc({ data: [], link: 'https://www.likebox.top' });
                     });
 
                 } else {
-                    break_abc({ data: [], link: 'https://www.likebox.top' })
+                    if (typeof break_abc === 'function') break_abc({ data: [], link: 'https://www.likebox.top' });
                 }
             })
             .catch(err => {
 
-                console.error('break load', err);
+                console.log('break load', err);
             });
     }
 
@@ -246,6 +270,8 @@ class adSdk {
 
     }
 
+    _timeoutTimer_load = null;
+
     _openAdsense() {
 
         const adsense_Script = document.createElement("script");
@@ -256,14 +282,19 @@ class adSdk {
 
         if (this.is_ad_test) { adsense_Script.setAttribute('data-adbreak-test', 'on') };
 
-        let attr_arr = this.ads_code.split(',');
-        for (let i = 0; i < attr_arr.length; i++) {
-            adsense_Script.setAttribute(attr_arr[i].split('=')[0], attr_arr[i].split('=')[1]);
+        if (this.ads_code && typeof this.ads_code === 'string') {
+            let attr_arr = this.ads_code.split(',');
+            for (let i = 0; i < attr_arr.length; i++) {
+                let keyValue = attr_arr[i].split('=');
+                if (keyValue.length === 2) {
+                    adsense_Script.setAttribute(keyValue[0], keyValue[1]);
+                }
+            }
         }
 
         adsense_Script.onload = () => {
             window.adsbygoogle = window.adsbygoogle || [];
-            window.adBreak = window.adConfig = function (o) { adsbygoogle.push(o); }
+            window.adBreak = window.adConfig = function (o) { window.adsbygoogle.push(o); }
             let isTimeOut = false;
             window.adConfig({
                 preloadAdBreaks: "on",
@@ -275,15 +306,17 @@ class adSdk {
                 }
             });
 
-            setTimeout(() => {
+            this._timeoutTimer_load = setTimeout(() => {
+                clearTimeout(this._timeoutTimer_load);
                 if (!isTimeOut) {
-                    this._eventAds.emit('error', "timeout", "noReady-adsense");
+                    this._eventAds.emit('error', "timeout", "notReady-adsense");
                 }
             }, 10000);
         }
 
         adsense_Script.onerror = (error) => {
-            this._eventAds.emit('error', "error", "loaded-adsense");
+
+            this._eventAds.emit('error', "error", "not-loaded-adsense");
             this.__sdklog("adsense loadError:", error);
         }
 
@@ -308,7 +341,7 @@ class adSdk {
         }
 
         adx_script.onerror = () => {
-            this._eventAds.emit('error', "error", "loaded-adx");
+            this._eventAds.emit('error', "error", "not-loaded-adx");
             this.__sdklog("adx load error");
         }
     }
@@ -331,23 +364,45 @@ class adSdk {
 
             self.rewardPayload = null;
 
-            googletag.cmd.push(() => {
+            window.googletag.cmd.push(() => {
 
-                googletag.pubads().addEventListener("rewardedSlotReady", (event) => {
-                    event.makeRewardedVisible();
+                window.googletag.pubads().addEventListener("rewardedSlotReady", (event) => {
+                    // GPT广告准备就绪，重置超时标志
+                    self.req_ad_timeout = false;
+
+                    // 清除备用超时
+                    if (self.gptBackupTimeout) {
+                        clearTimeout(self.gptBackupTimeout);
+                        self.gptBackupTimeout = null;
+                    }
+
+                    // Safely call makeRewardedVisible if it exists
+                    try {
+                        if (event && typeof event.makeRewardedVisible === 'function') {
+                            event.makeRewardedVisible();
+                        }
+                    } catch (e) {
+                        console.log('event.makeRewardedVisible err', e);
+                    }
                     self._eventAds.emit('beforeAd', "beforeAd", "pause");
-                    self.gpt_callback.beforeAd();
+                    if (self.gpt_callback && typeof self.gpt_callback.beforeAd === 'function') {
+                        self.gpt_callback.beforeAd();
+                    }
                 });
 
-                googletag.pubads().addEventListener("rewardedSlotClosed", () => {
+                window.googletag.pubads().addEventListener("rewardedSlotClosed", () => {
                     if (self.rewardPayload) {
                         // console.log("广告播放完成关闭");
                         if (self.gpt_type === 'rewardedAd') {
                             self._eventAds.emit('adViewed', "adViewed", "completed");
-                            self.gpt_callback.adViewed();
+                            if (self.gpt_callback && typeof self.gpt_callback.adViewed === 'function') {
+                                self.gpt_callback.adViewed();
+                            }
                         } else {
                             self._eventAds.emit('afterAd', "afterAd", "resume");
-                            self.gpt_callback.afterAd();
+                            if (self.gpt_callback && typeof self.gpt_callback.afterAd === 'function') {
+                                self.gpt_callback.afterAd();
+                            }
                         }
 
                         self.rewardPayload = null;
@@ -355,46 +410,72 @@ class adSdk {
                         // console.log("广告播放未完成关闭");
                         if (self.gpt_type === 'rewardedAd') {
                             self._eventAds.emit('adDismissed', "adDismissed", "skipped");
-                            self.gpt_callback.adDismissed();
+                            if (self.gpt_callback && typeof self.gpt_callback.adDismissed === 'function') {
+                                self.gpt_callback.adDismissed();
+                            }
                         } else {
                             self._eventAds.emit('afterAd', "afterAd", "resume");
-                            self.gpt_callback.afterAd();
+                            if (self.gpt_callback && typeof self.gpt_callback.afterAd === 'function') {
+                                self.gpt_callback.afterAd();
+                            }
                         }
 
                     }
 
                     if (self.rewardedSlot) {
-                        console.log("adclose");
-                        googletag.destroySlots([self.rewardedSlot]);
+                        // console.log("ad close");
+                        window.googletag.destroySlots([self.rewardedSlot]);
                         self.rewardedSlot = null;
                     }
                 });
 
-                googletag.pubads().addEventListener("rewardedSlotGranted", (event) => {
-                    self.rewardPayload = event.payload;
-                    console.log("Reward granted:", self.rewardPayload);
-                });
+                window.googletag.pubads().addEventListener("rewardedSlotGranted", (event) => {
+                    try {
+                        self.rewardPayload = event && event.payload ? event.payload : null;
 
-                googletag.pubads().addEventListener("slotRenderEnded", (event) => {
-                    if (event.slot === self.rewardedSlot && event.isEmpty) {
-                        console.log("No ad returned for rewarded ad slot.");
-                        self._eventAds.emit('error', 'error', "No ad returned for rewarded ad slot.");
+                    } catch (e) {
+
+                        self.rewardPayload = null;
                     }
                 });
 
-                googletag.enableServices();
+                window.googletag.pubads().addEventListener("slotRenderEnded", (event) => {
+                    try {
+                        if (event && event.slot === self.rewardedSlot) {
+                            // 清除备用超时
+                            if (self.gptBackupTimeout) {
+                                clearTimeout(self.gptBackupTimeout);
+                                self.gptBackupTimeout = null;
+                            }
+
+                            if (event.isEmpty) {
+
+                                self.req_ad_timeout = false; // 重置超时标志
+                                self._eventAds.emit('error', 'error', "No ad returned for rewarded ad slot.");
+                                if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
+                                    self.gpt_callback.error("No ad returned for rewarded ad slot.");
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.log('event.isEmpty err', e);
+                    }
+                });
+
+                window.googletag.enableServices();
 
             });
 
         }
 
         gpt_script.onerror = () => {
-            this._eventAds.emit('error', "error", "loaded-gpt");
+            this._eventAds.emit('error', "error", "not-loaded-gpt");
             this.__sdklog("gpt load error");
         }
     }
 
     _createAdxDom() {
+        console.log('ADX _createAdxDom called, creating container');
         const adTemplate = `
         <style id="adx-style">
             #adx-mainContainer {
@@ -435,21 +516,51 @@ class adSdk {
     }
 
     _destroyAdxDom() {
+        console.log('ADX _destroyAdxDom called');
         const el = document.getElementById('adx-mainContainer');
-        if (el) el.remove();
+        if (el) {
+            console.log('Removing ADX main container');
+            el.remove();
+        } else {
+            console.log('ADX main container not found');
+        }
         const styleTag = document.getElementById('adx-style');
-        if (styleTag) styleTag.remove();
-        self.adContainer = null;
-        self.videoContent = null;
+        if (styleTag) {
+            console.log('Removing ADX style tag');
+            styleTag.remove();
+        } else {
+            console.log('ADX style tag not found');
+        }
+        this.adContainer = null;
+        this.videoContent = null;
     }
 
     _onAdsManagerLoaded(adsManagerLoadedEvent) {
         let self = this;
 
+        // 清理ADX加载超时计时器，因为广告管理器已成功加载
+        if (self.adxLoadTimeout) {
+            clearTimeout(self.adxLoadTimeout);
+            self.adxLoadTimeout = null;
+        }
+
         const adsRenderingSettings = new google.ima.AdsRenderingSettings();
         adsRenderingSettings.useCustomPlaybackUI = false;
 
-        self.adsManager = adsManagerLoadedEvent.getAdsManager(self.videoContent, adsRenderingSettings);
+        try {
+            if (!adsManagerLoadedEvent || typeof adsManagerLoadedEvent.getAdsManager !== 'function') {
+                throw new Error('Invalid adsManagerLoadedEvent');
+            }
+            self.adsManager = adsManagerLoadedEvent.getAdsManager(self.videoContent, adsRenderingSettings);
+        } catch (e) {
+            self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
+            self._destroyAdxDom(); // 清理广告容器
+            self._eventAds.emit('error', 'error', 'notReady');
+            if (self.adx_callback && typeof self.adx_callback.error === 'function') {
+                self.adx_callback.error('notReady');
+            }
+            return;
+        }
 
         try {
             self.adsManager.init(
@@ -459,9 +570,13 @@ class adSdk {
             );
             self.adsManager.start();
         } catch (e) {
-            self._eventAds.emit('error', 'error', 'start_failed');
-            self.adx_callback.error('start_failed');
-            console.error('AdsManager start error:', e);
+            self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
+            self._destroyAdxDom(); // 清理广告容器
+            self._eventAds.emit('error', 'error', 'notReady');
+            if (self.adx_callback && typeof self.adx_callback.error === 'function') {
+                self.adx_callback.error('notReady');
+            }
+            return;
         }
 
         let isAdPaused = false;
@@ -482,9 +597,17 @@ class adSdk {
             google.ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED,
             () => {
                 self.req_ad_timeout = false;
-                // showAdContainer();
+
+                // 清理ADX加载超时计时器，因为广告已成功开始播放
+                if (self.adxLoadTimeout) {
+                    clearTimeout(self.adxLoadTimeout);
+                    self.adxLoadTimeout = null;
+                }
+
                 self._eventAds.emit('beforeAd', "beforeAd", "pause");
-                self.adx_callback.beforeAd();
+                if (self.adx_callback && typeof self.adx_callback.beforeAd === 'function') {
+                    self.adx_callback.beforeAd();
+                }
             }
         );
 
@@ -496,10 +619,15 @@ class adSdk {
                 self._destroyAdxDom();
                 if (self.adx_type === 'rewardedAd') {
                     self._eventAds.emit('adViewed', "adViewed", "completed");
-                    self.adx_callback.adViewed();
+                    if (self.adx_callback && typeof self.adx_callback.adViewed === 'function') {
+                        self.adx_callback.adViewed();
+                    }
+                } else {
+                    self._eventAds.emit('afterAd', "afterAd", "completed");
+                    if (self.adx_callback && typeof self.adx_callback.afterAd === 'function') {
+                        self.adx_callback.afterAd();
+                    }
                 }
-
-
             }
         );
 
@@ -510,10 +638,15 @@ class adSdk {
                 self._destroyAdxDom();
                 if (self.adx_type === 'rewardedAd') {
                     self._eventAds.emit('adDismissed', "adDismissed", "skipped");
-                    self.adx_callback.adDismissed();
+                    if (self.adx_callback && typeof self.adx_callback.adDismissed === 'function') {
+                        self.adx_callback.adDismissed();
+                    }
+                } else {
+                    self._eventAds.emit('afterAd', "afterAd", "skipped");
+                    if (self.adx_callback && typeof self.adx_callback.afterAd === 'function') {
+                        self.adx_callback.afterAd();
+                    }
                 }
-
-
             }
         );
 
@@ -524,7 +657,9 @@ class adSdk {
                 self._destroyAdxDom();
                 if (self.adx_type !== 'rewardedAd') {
                     self._eventAds.emit('afterAd', "afterAd", "resume");
-                    self.adx_callback.afterAd();
+                    if (self.adx_callback && typeof self.adx_callback.afterAd === 'function') {
+                        self.adx_callback.afterAd();
+                    }
                 }
             }
         );
@@ -535,11 +670,26 @@ class adSdk {
             (event) => {
                 self.req_ad_timeout = false;
                 self._destroyAdxDom();
-                let errorData = event.getError();
-                let errorType = errorData && errorData.data ? errorData.data.type : 'unknown';
-                let errorMessage = errorData && errorData.data ? errorData.data.errorMessage : 'Unknown error';
+                let errorData = null;
+                let errorType = 'unknown';
+                let errorMessage = 'Unknown error';
+
+                try {
+                    if (event && typeof event.getError === 'function') {
+                        errorData = event.getError();
+                        if (errorData && errorData.data) {
+                            errorType = errorData.data.type || 'unknown';
+                            errorMessage = errorData.data.errorMessage || 'Unknown error';
+                        }
+                    }
+                } catch (e) {
+                    console.log('adx IMA err:', e);
+                }
+
                 self._eventAds.emit('error', errorType, errorMessage);
-                self.adx_callback.error(errorType);
+                if (self.adx_callback && typeof self.adx_callback.error === 'function') {
+                    self.adx_callback.error(errorType);
+                }
 
             }
         );
@@ -548,22 +698,53 @@ class adSdk {
     }
 
     _onAdError(event) {
+        console.log('ADX _onAdError called, destroying container');
         this._destroyAdxDom();
 
         this.req_ad_timeout = false;
 
-        let errorData = event.getError();
-        let errorType = errorData && errorData.data ? errorData.data.type : 'unknown';
-        let errorMessage = errorData && errorData.data ? errorData.data.errorMessage : 'Unknown error';
+        // 清理ADX加载超时计时器
+        if (this.adxLoadTimeout) {
+            clearTimeout(this.adxLoadTimeout);
+            this.adxLoadTimeout = null;
+        }
+
+        let errorData = null;
+        let errorType = 'unknown';
+        let errorMessage = 'Unknown error';
+
+        try {
+            if (event && typeof event.getError === 'function') {
+                errorData = event.getError();
+                if (errorData && errorData.data) {
+                    errorType = errorData.data.type || 'unknown';
+                    errorMessage = errorData.data.errorMessage || 'Unknown error';
+                }
+            }
+        } catch (e) {
+            console.log('adx IMA err:', e);
+        }
 
         this._eventAds.emit('error', errorType, errorMessage);
-        this.adx_callback.error(errorType);
+        if (this.adx_callback && typeof this.adx_callback.error === 'function') {
+            this.adx_callback.error(errorType);
+        }
 
     }
 
     _showAdx() {
 
         let self = this;
+
+        // 检查Google IMA SDK是否加载成功
+        if (typeof google === 'undefined' || typeof google.ima === 'undefined') {
+            self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
+            self._eventAds.emit('error', 'error', 'notReady');
+            if (self.adx_callback && typeof self.adx_callback.error === 'function') {
+                self.adx_callback.error('notReady');
+            }
+            return;
+        }
 
         if (self.adsManager) {
             self.adsManager.destroy();
@@ -583,82 +764,261 @@ class adSdk {
 
 
         if (!self.adContainer || !self.videoContent) {
-            console.error('ADX DOM elements not found');
-            self._eventAds.emit('error', 'error', 'dom_not_found');
-            self.adx_callback.error('dom_not_found');
+            self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
+            self._destroyAdxDom(); // 清理广告容器
+            self._eventAds.emit('error', 'error', 'notReady');
+            if (self.adx_callback && typeof self.adx_callback.error === 'function') {
+                self.adx_callback.error('notReady');
+            }
             return;
         }
 
+        // 设置ADX广告加载超时，防止广告容器长时间显示空白
+        self.adxLoadTimeout = setTimeout(() => {
+            if (self.req_ad_timeout) { // 如果仍在请求状态
+                console.log('ADX ad loading timeout, destroying container');
+                self.req_ad_timeout = false;
+                self._destroyAdxDom(); // 清理广告容器
+                self._eventAds.emit('error', 'error', 'timeout');
+                if (self.adx_callback && typeof self.adx_callback.error === 'function') {
+                    self.adx_callback.error('timeout');
+                }
+            }
+        }, 10000); // 10秒超时
 
-        self.adDisplayContainer = new google.ima.AdDisplayContainer(self.adContainer, self.videoContent);
-        self.adsLoader = new google.ima.AdsLoader(self.adDisplayContainer);
+        try {
+            self.adDisplayContainer = new google.ima.AdDisplayContainer(self.adContainer, self.videoContent);
+            self.adsLoader = new google.ima.AdsLoader(self.adDisplayContainer);
 
+            self.adsLoader.addEventListener(
+                google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,
+                (event) => self._onAdsManagerLoaded(event),
+                false
+            );
+            self.adsLoader.addEventListener(
+                google.ima.AdErrorEvent.Type.AD_ERROR,
+                (event) => self._onAdError(event),
+                false
+            );
 
-        self.adsLoader.addEventListener(
-            google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,
-            (event) => self._onAdsManagerLoaded(event),
-            false
-        );
-        self.adsLoader.addEventListener(
-            google.ima.AdErrorEvent.Type.AD_ERROR,
-            (event) => self._onAdError(event),
-            false
-        );
+            self.videoWidth = document.documentElement.clientWidth || window.innerWidth;
+            self.videoHeight = document.documentElement.clientHeight || window.innerHeight;
+            self.adDisplayContainer.initialize();
 
-        self.videoWidth = document.documentElement.clientWidth || window.innerWidth;
-        self.videoHeight = document.documentElement.clientHeight || window.innerHeight;
-        self.adDisplayContainer.initialize();
+            const adsRequest = new google.ima.AdsRequest();
+            adsRequest.adTagUrl = self.is_ad_test ? self._getTestAdxUrl("Preroll") :
+                (self.ima_code + self._generateUniqueCorrelator());
+            // console.log('adxRequest=', self.videoWidth, self.videoHeight);
+            adsRequest.linearAdSlotWidth = self.videoWidth;
+            adsRequest.linearAdSlotHeight = self.videoHeight;
 
-
-        const adsRequest = new google.ima.AdsRequest();
-        adsRequest.adTagUrl = self.is_ad_test ? self._getTestAdxUrl("Preroll") :
-            (self.ima_code + self._generateUniqueCorrelator());
-        // console.log('adxRequest=', self.videoWidth, self.videoHeight);
-        adsRequest.linearAdSlotWidth = self.videoWidth;
-        adsRequest.linearAdSlotHeight = self.videoHeight;
-
-
-        self.adsLoader.requestAds(adsRequest);
+            self.adsLoader.requestAds(adsRequest);
+        } catch (e) {
+            console.log('ADX initialization error:', e);
+            self.req_ad_timeout = false;
+            self._destroyAdxDom(); // 清理广告容器
+            if (self.adxLoadTimeout) {
+                clearTimeout(self.adxLoadTimeout);
+                self.adxLoadTimeout = null;
+            }
+            self._eventAds.emit('error', 'error', 'initError');
+            if (self.adx_callback && typeof self.adx_callback.error === 'function') {
+                self.adx_callback.error('initError');
+            }
+        }
     }
+
+    gptBackupTimeout = null; // GPT备用超时
 
     _showGPT() {
 
         let self = this;
+
+        // 检查Google Publisher Tag SDK是否加载成功
+        if (typeof window.googletag === 'undefined' || !window.googletag.cmd) {
+            self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
+            self._eventAds.emit('error', 'error', 'notReady');
+            if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
+                self.gpt_callback.error('notReady');
+            }
+            return;
+        }
+
         let gpt_code = self.is_ad_test ? self._getTestAdxUrl("gpt") : self.gpt_code;
-        googletag.cmd.push(() => {
+
+        // 设置一个备用超时，如果30秒内没有任何GPT事件响应，直接报错
+        self.gptBackupTimeout = setTimeout(() => {
+            if (self.req_ad_timeout) {
+
+                self.req_ad_timeout = false;
+                self._eventAds.emit('error', 'error', 'gpt_no_response');
+                if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
+                    self.gpt_callback.error('gpt_no_response');
+                }
+            }
+        }, 30000);
+
+        window.googletag.cmd.push(() => {
             // 创建新的广告位
-            self.rewardedSlot = googletag.defineOutOfPageSlot(
+            self.rewardedSlot = window.googletag.defineOutOfPageSlot(
                 gpt_code,
-                googletag.enums.OutOfPageFormat.REWARDED,
+                window.googletag.enums.OutOfPageFormat.REWARDED,
             );
 
             if (self.rewardedSlot) {
-                self.rewardedSlot.addService(googletag.pubads());
-                googletag.display(self.rewardedSlot);
+                self.rewardedSlot.addService(window.googletag.pubads());
+                window.googletag.display(self.rewardedSlot);
+
             } else {
-                console.error("Failed to create rewarded ad slot.");
+
+                if (self.gptBackupTimeout) {
+                    clearTimeout(self.gptBackupTimeout);
+                    self.gptBackupTimeout = null;
+                }
+                self.req_ad_timeout = false;
+                self._eventAds.emit('error', 'error', 'create_slot_failed');
+                if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
+                    self.gpt_callback.error('create_slot_failed');
+                }
             }
         });
 
     }
 
+    _showAdsense() {
+        let self = this;
+
+        // 检查adBreak函数是否存在
+        if (typeof window.adBreak !== 'function') {
+            self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
+            if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error("notReady-adsense");
+            self._eventAds.emit('error', "error", "notReady-adsense");
+            return;
+        }
+        if (self.adsense_type === 'rewardedAd') {
+
+            window.adBreak({
+                type: 'reward',
+                beforeAd() {
+                    self.req_ad_timeout = false;
+
+                    self._eventAds.emit('beforeAd', "rewardedAd", 'beforeAd');
+                    if (typeof self.adsense_callback.beforeAd === 'function') self.adsense_callback.beforeAd();
+                },
+                beforeReward(showAdFn) { showAdFn(); },
+                adDismissed() {
+
+                    self._eventAds.emit('adDismissed', "adDismissed");
+                    if (typeof self.adsense_callback.adDismissed === 'function') self.adsense_callback.adDismissed();
+                },
+                adViewed() {
+
+                    self._eventAds.emit('adViewed', "adViewed");
+                    if (typeof self.adsense_callback.adViewed === 'function') self.adsense_callback.adViewed();
+                },
+                adBreakDone(placement_info) {
+
+                    self.req_ad_timeout = false;
+                    let breakStatus = placement_info && placement_info.breakStatus ? placement_info.breakStatus : 'unknown';
+                    self._eventAds.emit('error', "reward_error", breakStatus);
+                    if (breakStatus !== 'viewed') {
+                        if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
+                    }
+                }
+            });
+        } else {
+            if (self.is_first) {
+                window.adBreak({
+                    type: 'preroll',
+                    beforeAd() {
+
+                        self.req_ad_timeout = false;
+                        self._eventAds.emit('beforeAd', "interstitialAd", "beforeAd");
+                        if (typeof self.adsense_callback.beforeAd === 'function') self.adsense_callback.beforeAd();
+                    },
+                    adBreakDone(placement_info) {
+                        self.is_first = false;
+                        self.req_ad_timeout = false;
+                        // console.log('adBreakDone', placement_info);
+                        let breakStatus = placement_info && placement_info.breakStatus ? placement_info.breakStatus : 'unknown';
+                        self._eventAds.emit('error', "interstitial_error", breakStatus);
+
+                        if (breakStatus !== 'viewed') {
+                            if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
+                        }
+
+                    }
+                });
+            } else {
+                window.adBreak({
+                    type: ["start", "pause", "next", "browse"][Math.floor(Math.random() * 4)],
+
+                    beforeAd() {
+
+                        self.req_ad_timeout = false;
+                        self._eventAds.emit('beforeAd', "interstitialAd", "beforeAd");
+                        if (typeof self.adsense_callback.beforeAd === 'function') self.adsense_callback.beforeAd();
+                    },
+                    afterAd() {
+
+                        self._eventAds.emit('afterAd', "interstitialAd", "afterAd");
+                        if (typeof self.adsense_callback.afterAd === 'function') self.adsense_callback.afterAd();
+                    },
+                    adBreakDone(placement_info) {
+                        self.is_first = false;
+                        self.req_ad_timeout = false;
+                        // console.log('adBreakDone', placement_info);
+                        let breakStatus = placement_info && placement_info.breakStatus ? placement_info.breakStatus : 'unknown';
+                        self._eventAds.emit('error', "interstitial_error", breakStatus);
+
+                        if (breakStatus !== 'viewed') {
+                            if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
+                        }
+
+                    }
+                });
+            }
+
+        }
+
+    }
+
+    _debounceTimer = null;
+    _timeoutTimer = null;
+
     // 插页
     _showInterstitialAd(callback) {
         let self = this;
 
+        // 检查SDK是否准备就绪,目前adsense不需要检查
+        // if (!self.adSdk_isReady) {
+        //     if (typeof callback.error === 'function') callback.error("notReady");
+        //     self._eventAds.emit('error', "error", "notReady");
+        //     return;
+        // }
+
         //1秒内禁止重复,防抖
         if (self.req_ad_stabilization) {
-            callback.error("frequencyCapped");
+            if (typeof callback.error === 'function') callback.error("frequencyCapped");
             return;
         }
-        setTimeout(() => {
-            console.log('^^^^^^^^^req_ad_stabilization^^^^^^^^^^^^');
+        self._debounceTimer = setTimeout(() => {
+            clearTimeout(self._debounceTimer);
             self.req_ad_stabilization = false;
         }, 1000);
 
         self.req_ad_stabilization = true;
 
         self._eventAds.emit('interstitial', "interstitialAd");
+
+        self._timeoutTimer = setTimeout(() => {
+            clearTimeout(self._timeoutTimer);
+            if (self.req_ad_timeout) {
+                self.is_first = false;
+                self._eventAds.emit('error', "error", "timeout");
+                if (typeof callback.error === 'function') callback.error("timeout");
+            }
+        }, 8000);
 
         let now = Date.now();
         if (!self.interstitial_time_start) {
@@ -667,7 +1027,7 @@ class adSdk {
 
         // 如果超过30秒，重置计数器
         let now_duration = now - self.interstitial_time_start;
-        console.log('now_duration=', now_duration, 'interstitial_time_start=', self.interstitial_time_start);
+        // console.log('now_duration=', now_duration, 'interstitial_time_start=', self.interstitial_time_start);
 
         if (self.interstitial_requests_count > 1) {
 
@@ -675,10 +1035,9 @@ class adSdk {
 
                 self.interstitial_time_start = now;
             } else {
-                callback.error({ ad_error_type: 'frequencyinterstitialAd' })
+                if (typeof callback.error === 'function') callback.error({ ad_error_type: 'frequencyinterstitialAd' });
                 self._eventAds.emit('error', "frequencyinterstitialAd", 'frequencyinterstitialAd');
                 return false;
-
             }
         }
         self.interstitial_requests_count++;
@@ -686,67 +1045,69 @@ class adSdk {
         // 请求广告超时
         self.req_ad_timeout = true;
         if (self.adType === self.adsType.ADSENSE) {
-
-            adBreak({
-                type: self.is_first ? 'start' : ["start", "pause", "next", "browse"][Math.floor(Math.random() * 4)],
-                beforeAd() {
-
-                    self.req_ad_timeout = false;
-                    self._eventAds.emit('beforeAd', "interstitialAd", "beforeAd");
-                    if (typeof callback.beforeAd === 'function') callback.beforeAd();
-                },
-                afterAd() {
-
-                    self._eventAds.emit('afterAd', "interstitialAd", "afterAd");
-                    callback.afterAd();
-                },
-                adBreakDone(placement_info) {
-                    self.is_first = false;
-                    self.req_ad_timeout = false;
-                    console.log('adBreakDone', placement_info);
-                    self._eventAds.emit('error', "interstitial_error", placement_info.breakStatus);
-
-                    if (placement_info.breakStatus !== 'viewed') {
-
-                        callback.error(placement_info.breakStatus);
-                    }
-
-                }
+            self.adsense_type = 'interstitialAd';
+            // 安全地合并回调对象，保留默认的空函数
+            Object.assign(self.adsense_callback, {
+                error: (callback && callback.error) || (() => { }),
+                beforeAd: (callback && callback.beforeAd) || (() => { }),
+                afterAd: (callback && callback.afterAd) || (() => { }),
+                adViewed: (callback && callback.adViewed) || (() => { }),
+                adDismissed: (callback && callback.adDismissed) || (() => { })
             });
+            self._showAdsense();
+
         }
         else if (self.adType === self.adsType.IMA) {
 
             self.adx_type = 'interstitialAd';
-            self.adx_callback = callback;
+            // 安全地合并回调对象，保留默认的空函数
+            Object.assign(self.adx_callback, {
+                error: (callback && callback.error) || (() => { }),
+                beforeAd: (callback && callback.beforeAd) || (() => { }),
+                afterAd: (callback && callback.afterAd) || (() => { }),
+                adViewed: (callback && callback.adViewed) || (() => { }),
+                adDismissed: (callback && callback.adDismissed) || (() => { })
+            });
 
             self._showAdx();
 
 
         } else if (self.adType === self.adsType.GPT) {
             self.gpt_type = 'interstitialAd';
-            self.gpt_callback = callback;
+            // 安全地合并回调对象，保留默认的空函数
+            Object.assign(self.gpt_callback, {
+                error: (callback && callback.error) || (() => { }),
+                beforeAd: (callback && callback.beforeAd) || (() => { }),
+                afterAd: (callback && callback.afterAd) || (() => { }),
+                adViewed: (callback && callback.adViewed) || (() => { }),
+                adDismissed: (callback && callback.adDismissed) || (() => { })
+            });
             self._showGPT();
         }
 
-        setTimeout(() => {
-            if (self.req_ad_timeout) {
-                self.is_first = false;
-                self._eventAds.emit('error', "error", "timeout");
-                callback.error("timeout");
-            }
-        }, 8000);
+
     }
 
+    _debounceTimer_reward = null;
+    _timeoutTimer_reward = null;
     // 激励
     _showRewardAd(callback) {
         let self = this;
 
+        // 检查SDK是否准备就绪
+        // if (!self.adSdk_isReady) {
+        //     if (typeof callback.error === 'function') callback.error("notReady");
+        //     self._eventAds.emit('error', "error", "notReady");
+        //     return;
+        // }
+
         if (self.req_ad_stabilization) {
-            callback.error("frequencyCapped");
+            if (typeof callback.error === 'function') callback.error("frequencyCapped");
             return;
         };
 
-        setTimeout(() => {
+        self._debounceTimer_reward = setTimeout(() => {
+            clearTimeout(self._debounceTimer_reward);
             self.req_ad_stabilization = false;
         }, 1000);
 
@@ -754,22 +1115,30 @@ class adSdk {
 
         self._eventAds.emit('reward', "rewardAd");
 
+        self._timeoutTimer_reward = setTimeout(() => {
+            clearTimeout(self._timeoutTimer_reward);
+            if (self.req_ad_timeout) {
+                self._eventAds.emit('error', "error", "timeout");
+                if (typeof callback.error === 'function') callback.error("timeout");
+            }
+        }, 8000);
+
         const now = Date.now();
-        if (!this.reward_time_start) {
-            this.reward_time_start = now;
+        if (!self.reward_time_start) {
+            self.reward_time_start = now;
         }
 
         // 如果超过30秒，重置计数器
         let now_duration = now - self.reward_time_start;
-        console.log('now_duration=', now_duration, 'reward_time_start=', self.reward_time_start);
+        // console.log('now_duration=', now_duration, 'reward_time_start=', self.reward_time_start);
         if (now_duration > 30000) {
             self.reward_time_start = 0;
-            this.reward_requests_count = 3;
+            self.reward_requests_count = 3;
         }
 
         // 检查是否超过3次限制
         if (self.reward_requests_count <= 0) {
-            callback.error({ ad_error_type: 'frequencyrewardAd' })
+            if (typeof callback.error === 'function') callback.error({ ad_error_type: 'frequencyrewardAd' });
             self._eventAds.emit('error', "frequencyrewardAd", 'frequencyrewardAd');
             return false;
         }
@@ -780,52 +1149,45 @@ class adSdk {
         self.req_ad_timeout = true;
 
         if (self.adType === self.adsType.ADSENSE) {
-            adBreak({
-                type: 'reward',
-                beforeAd() {
-                    self.req_ad_timeout = false;
 
-                    self._eventAds.emit('beforeAd', "rewardedAd", 'beforeAd');
-                    if (typeof callback.beforeAd === 'function') callback.beforeAd();
-                },
-                beforeReward(showAdFn) { showAdFn(); },
-                adDismissed() {
-
-                    self._eventAds.emit('adDismissed', "adDismissed");
-                    callback.adDismissed();
-                },
-                adViewed() {
-
-                    self._eventAds.emit('adViewed', "adViewed");
-                    callback.adViewed();
-                },
-                adBreakDone(placement_info) {
-
-                    self.req_ad_timeout = false;
-                    self._eventAds.emit('error', "reward_error", placement_info.breakStatus);
-                    if (placement_info.breakStatus !== 'viewed') {
-                        callback.error(placement_info.breakStatus);
-                    }
-                }
+            self.adsense_type = 'rewardedAd';
+            // 安全地合并回调对象，保留默认的空函数
+            Object.assign(self.adsense_callback, {
+                error: (callback && callback.error) || (() => { }),
+                beforeAd: (callback && callback.beforeAd) || (() => { }),
+                afterAd: (callback && callback.afterAd) || (() => { }),
+                adViewed: (callback && callback.adViewed) || (() => { }),
+                adDismissed: (callback && callback.adDismissed) || (() => { })
             });
+            self._showAdsense();
+
+
         } else if (self.adType === self.adsType.IMA) {
             self.adx_type = 'rewardedAd';
-            self.adx_callback = callback;
+            // 安全地合并回调对象，保留默认的空函数
+            Object.assign(self.adx_callback, {
+                error: (callback && callback.error) || (() => { }),
+                beforeAd: (callback && callback.beforeAd) || (() => { }),
+                afterAd: (callback && callback.afterAd) || (() => { }),
+                adViewed: (callback && callback.adViewed) || (() => { }),
+                adDismissed: (callback && callback.adDismissed) || (() => { })
+            });
 
             self._showAdx();
         } else if (self.adType === self.adsType.GPT) {
             self.gpt_type = 'rewardedAd';
-            self.gpt_callback = callback;
+            // 安全地合并回调对象，保留默认的空函数
+            Object.assign(self.gpt_callback, {
+                error: (callback && callback.error) || (() => { }),
+                beforeAd: (callback && callback.beforeAd) || (() => { }),
+                afterAd: (callback && callback.afterAd) || (() => { }),
+                adViewed: (callback && callback.adViewed) || (() => { }),
+                adDismissed: (callback && callback.adDismissed) || (() => { })
+            });
             self._showGPT();
         }
 
-        setTimeout(() => {
-            if (self.req_ad_timeout) {
 
-                self._eventAds.emit('error', "error", "timeout");
-                callback.error("timeout");
-            }
-        }, 8000);
     }
 
 
@@ -906,16 +1268,16 @@ class adSdk {
         ga_script.onload = () => {
 
 
-            gtag("consent", "default", {
+            window.gtag("consent", "default", {
                 "ad_storage": "granted",
                 "ad_user_data": "granted",
                 "ad_personalization": "granted",
                 "analytics_storage": "granted"
             });
 
-            gtag('js', new Date());
-            gtag('set', 'cookie_flags', 'SameSite=None;Secure');
-            gtag('config', 'G-NL2943ZRFH', {
+            window.gtag('js', new Date());
+            window.gtag('set', 'cookie_flags', 'SameSite=None;Secure');
+            window.gtag('config', 'G-NL2943ZRFH', {
                 game_id: self.gameid,
                 'dev_name': self.dev_name//self.config.client
             });
@@ -960,14 +1322,21 @@ class adSdk {
                     ar2['send'] === 'sdk')
             ) {
                 self.__sdklog3(arguments)
-                window.dataLayer.push(arguments);
+                try {
+                    if (window.dataLayer && typeof window.dataLayer.push === 'function') {
+                        window.dataLayer.push(arguments);
+                    }
+                } catch (e) {
+                    console.log('dataLayer:', e);
+                }
             }
 
             if (ar[1] === 'game_start' && !gamePlayTimerStarted) {
                 gamePlayTimerStarted = true;
                 setInterval(function () {
-                    // window.dataLayer.push(['event', 'game_play_time', { send: 'sdk' }]);
-                    gtag('event', 'game_play_time', { send: 'sdk' });
+                    if (typeof window.gtag === 'function') {
+                        window.gtag('event', 'game_play_time', { send: 'sdk' });
+                    }
                 }, 30000);
             }
 
@@ -982,34 +1351,38 @@ class adSdk {
     _getTestAdxUrl(type) {
         // 返回一个测试的beta URL
         const beta_url = backup_beta_urls[type];// + Date.now();
-        console.log('Using testURL:', beta_url);
+        console.log('testURL:', beta_url);
 
         return beta_url
     }
     _generateUniqueCorrelator() {
-        return Date.now();//Math.random().toString(36).substr(2, 9);// +
+        return Date.now();
     }
 
     _ajax(url, method, data) {
         return new Promise(function (resolve, reject) {
-            let xhr = new XMLHttpRequest();
-            xhr.open(method, url, true)
-            xhr.responseType = 'json'
-            xhr.setRequestHeader("Accept", "application/json")
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState !== 4) {
-                    return;
+            try {
+                let xhr = new XMLHttpRequest();
+                xhr.open(method, url, true)
+                xhr.responseType = 'json'
+                xhr.setRequestHeader("Accept", "application/json")
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState !== 4) {
+                        return;
+                    }
+                    if (xhr.status === 200) {
+                        resolve(xhr.response)
+                    } else {
+                        reject(xhr.statusText)
+                    }
                 }
-                if (xhr.status === 200) {
-                    resolve(xhr.response)
+                if (method === 'GET') {
+                    xhr.send()
                 } else {
-                    reject(xhr.statusText)
+                    xhr.send(JSON.stringify(data))
                 }
-            }
-            if (method === 'GET') {
-                xhr.send()
-            } else {
-                xhr.send(JSON.stringify(data))
+            } catch (error) {
+                reject(error);
             }
         })
 
@@ -1064,11 +1437,6 @@ const backup_beta_urls = {
 
 const vast_url = 'https://pubads.g.doubleclick.net/gampad/ads?iu=/22149012983/h5-bwg-vast/400x300-1180marketjs-id00032-bwg&description_url=https%3A%2F%2Fwww.likebox.xyz&tfcd=0&npa=0&sz=400x300&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=';
 const ads_list = {
-    "default_ads": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=4449826950",
-    "1312-marketjs": "data-ad-client=ca-pub-3615084434427281",
-    "1313-marketjs": "data-ad-client=ca-pub-3615084434427281",
-    "1211-marketjs": "data-ad-client=ca-pub-3615084434427281",
-    "589-marketjs": "data-ad-client=ca-pub-3615084434427281",
     "495-marketjs": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9271205033",
     "495-behappy": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=4889854667",
     "495-91games": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9806299103",
@@ -1157,18 +1525,11 @@ const ads_list = {
     "371-91games": "data-ad-client=ca-pub-9717542802261829",
     "371-cpsense": "data-ad-client=ca-pub-9717542802261829",
     "371-marketjs": "data-ad-client=ca-pub-9717542802261829",
-    "1323-marketjs": "data-ad-client=ca-pub-5985150674191762",
-    "1323-behappy": "data-ad-client=ca-pub-5985150674191762",
-    "1323-91games": "data-ad-client=ca-pub-5985150674191762",
-    "1323-cpsense": "data-ad-client=ca-pub-5985150674191762",
     "3553-marketjs": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9271205033",
     "3553-behappy": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=4889854667",
     "3553-91games": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9806299103",
     "3553-cpsense": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=6594334796",
     "3553-cpsense-cd": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9315884711",
-    "2120-marketjs": "data-ad-client=ca-pub-3615084434427281",
-    "2120-cpsense": "data-ad-client=ca-pub-3615084434427281",
-    "2120-cpsense-cd": "data-ad-client=ca-pub-3615084434427281",
     "3936-marketjs": "data-ad-client=ca-pub-5985150674191762",
     "3936-behappy": "data-ad-client=ca-pub-5985150674191762",
     "3936-91games": "data-ad-client=ca-pub-5985150674191762",
@@ -1184,14 +1545,25 @@ const ads_list = {
     "3938-91games": "data-ad-client=ca-pub-9973079271836529",
     "3938-cpsense": "data-ad-client=ca-pub-9973079271836529",
     "3938-cpsense-cd": "data-ad-client=ca-pub-9973079271836529",
-    "3939-marketjs": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
-    "3939-behappy": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
-    "3939-91games": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
-    "3939-cpsense": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
-    "3939-cpsense-cd": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/23269691274\/www.funxon.com\/www.funxon.com-reward-052301&description_url=http%3A%2F%2Fwww.funxon.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&correlator=",
+    "1323-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "1323-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "1323-91games": "data-ad-client=ca-pub-5985150674191762",
+    "1323-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "1323-cpsense-cd": "data-ad-client=ca-pub-5985150674191762",
+    "193-marketjs": "\/91325758\/h5-bwg-game\/reward-game-ads",
+    "193-behappy": "\/91325758\/h5-bwg-game\/reward-game-ads",
+    "193-91games": "\/91325758\/h5-bwg-game\/reward-game-ads",
+    "193-cpsense": "\/91325758\/h5-bwg-game\/reward-game-ads",
+    "193-cpsense-cd": "\/91325758\/h5-bwg-game\/reward-game-ads",
+    "3942-marketjs": "data-ad-client=ca-pub-4230754353315567",
+    "3942-behappy": "data-ad-client=ca-pub-4230754353315567",
+    "3942-91games": "data-ad-client=ca-pub-4230754353315567",
+    "3942-cpsense": "data-ad-client=ca-pub-4230754353315567",
+    "3942-cpsense-cd": "data-ad-client=ca-pub-4230754353315567",
     "marketjs": "data-ad-client=ca-pub-5396158963872751",
     "behappy": "data-ad-client=ca-pub-5396158963872751",
     "91games": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=9348592544",
     "cpsense": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=6920911773",
-    "cpsense-cd": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=6940252753"
+    "cpsense-cd": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=6940252753",
+    "default_ads": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=4449826950"
 }

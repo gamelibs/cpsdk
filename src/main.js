@@ -19,8 +19,9 @@ const ACTIVE_CLASS = 'active';
 
 // 初始化广告
 const adSdkConfig = {
-  client: 'cpsense',
-  // client: 'test_gpt'
+  client: '487-cpsense',
+  // client: 'gpt'
+  // client: '3939-marketjs'
 }
 
 const adInstance = new adSdk(adSdkConfig);
