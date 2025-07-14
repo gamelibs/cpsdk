@@ -6,6 +6,7 @@
  * 可以不回调beforeAd()
  * 只有adsense有首次判定is_first
  * 修改首次广告为preroll(20250703)
+ * 修复adx重复创建容器BUG(20250714)
  */
 
 class adSdk {
@@ -474,6 +475,7 @@ class adSdk {
         }
     }
 
+    _isAdxDom = false;
     _createAdxDom() {
         console.log('ADX _createAdxDom called, creating container');
         const adTemplate = `
@@ -513,6 +515,7 @@ class adSdk {
         </div>
     `;
         document.body.insertAdjacentHTML('beforeend', adTemplate);
+        this._isAdxDom = true;
     }
 
     _destroyAdxDom() {
@@ -533,6 +536,7 @@ class adSdk {
         }
         this.adContainer = null;
         this.videoContent = null;
+        this._isAdxDom = false;
     }
 
     _onAdsManagerLoaded(adsManagerLoadedEvent) {
@@ -756,8 +760,9 @@ class adSdk {
             self.adsLoader = null;
         }
 
-        self._createAdxDom();
-
+        if (!self._isAdxDom) {
+            self._createAdxDom();
+        }
 
         self.adContainer = document.getElementById('adx-adContainer');
         self.videoContent = document.getElementById('adx-contentElement');
@@ -766,6 +771,7 @@ class adSdk {
         if (!self.adContainer || !self.videoContent) {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             self._destroyAdxDom(); // 清理广告容器
+            
             self._eventAds.emit('error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
@@ -1442,14 +1448,14 @@ const backup_beta_urls = {
 
 const vast_url = 'https://pubads.g.doubleclick.net/gampad/ads?iu=/22149012983/h5-bwg-vast/400x300-1180marketjs-id00032-bwg&description_url=https%3A%2F%2Fwww.likebox.xyz&tfcd=0&npa=0&sz=400x300&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=';
 const ads_list = {
-    "495-marketjs": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9271205033",
-    "495-behappy": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=4889854667",
-    "495-91games": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9806299103",
-    "495-cpsense": "data-ad-client=ca-pub-2252168419307880,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=6594334796",
-    "316-cpsense": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/22846978691\/h5-bwg-vast\/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
-    "316-marketjs": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/22846978691\/h5-bwg-vast\/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
-    "316-91games": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/22846978691\/h5-bwg-vast\/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
-    "316-behappy": "https:\/\/pubads.g.doubleclick.net\/gampad\/ads?iu=\/22846978691\/h5-bwg-vast\/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "495-marketjs": "data-ad-client=ca-pub-2252168419307880",
+    "495-behappy": "data-ad-client=ca-pub-2252168419307880",
+    "495-91games": "data-ad-client=ca-pub-2252168419307880",
+    "495-cpsense": "data-ad-client=ca-pub-2252168419307880",
+    "316-cpsense": "https://pubads.g.doubleclick.net/gampad/ads?iu=/22846978691/h5-bwg-vast/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "316-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/22846978691/h5-bwg-vast/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "316-91games": "https://pubads.g.doubleclick.net/gampad/ads?iu=/22846978691/h5-bwg-vast/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "316-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/22846978691/h5-bwg-vast/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
     "487-behappy": "data-ad-client=ca-pub-5985150674191762",
     "487-91games": "data-ad-client=ca-pub-5985150674191762",
     "487-marketjs": "data-ad-client=ca-pub-5985150674191762",
@@ -1530,11 +1536,6 @@ const ads_list = {
     "371-91games": "data-ad-client=ca-pub-9717542802261829",
     "371-cpsense": "data-ad-client=ca-pub-9717542802261829",
     "371-marketjs": "data-ad-client=ca-pub-9717542802261829",
-    "3553-marketjs": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9271205033",
-    "3553-behappy": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=4889854667",
-    "3553-91games": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9806299103",
-    "3553-cpsense": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=6594334796",
-    "3553-cpsense-cd": "data-ad-client=ca-pub-8934204454340791,data-ad-host=ca-host-pub-5396158963872751,data-ad-host-channel=9315884711",
     "3936-marketjs": "data-ad-client=ca-pub-5985150674191762",
     "3936-behappy": "data-ad-client=ca-pub-5985150674191762",
     "3936-91games": "data-ad-client=ca-pub-5985150674191762",
@@ -1555,20 +1556,46 @@ const ads_list = {
     "1323-91games": "data-ad-client=ca-pub-5985150674191762",
     "1323-cpsense": "data-ad-client=ca-pub-5985150674191762",
     "1323-cpsense-cd": "data-ad-client=ca-pub-5985150674191762",
-    "193-marketjs": "\/91325758\/h5-bwg-game\/reward-game-ads",
-    "193-behappy": "\/91325758\/h5-bwg-game\/reward-game-ads",
-    "193-91games": "\/91325758\/h5-bwg-game\/reward-game-ads",
-    "193-cpsense": "\/91325758\/h5-bwg-game\/reward-game-ads",
-    "193-cpsense-cd": "\/91325758\/h5-bwg-game\/reward-game-ads",
+    "193-marketjs": "/91325758/h5-bwg-game/reward-game-ads",
+    "193-behappy": "/91325758/h5-bwg-game/reward-game-ads",
+    "193-91games": "/91325758/h5-bwg-game/reward-game-ads",
+    "193-cpsense": "/91325758/h5-bwg-game/reward-game-ads",
+    "193-cpsense-cd": "/91325758/h5-bwg-game/reward-game-ads",
     "3942-marketjs": "data-ad-client=ca-pub-4230754353315567",
     "3942-behappy": "data-ad-client=ca-pub-4230754353315567",
     "3942-91games": "data-ad-client=ca-pub-4230754353315567",
     "3942-cpsense": "data-ad-client=ca-pub-4230754353315567",
     "3942-cpsense-cd": "data-ad-client=ca-pub-4230754353315567",
-    "marketjs": "data-ad-client=ca-pub-5396158963872751",
-    "behappy": "data-ad-client=ca-pub-5396158963872751",
-    "91games": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=9348592544",
-    "cpsense": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=6920911773",
-    "cpsense-cd": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=6940252753",
-    "default_ads": "data-ad-client=ca-pub-5396158963872751,data-ad-channel=4449826950"
-}
+    "3917-marketjs": "0",
+    "3553-marketjs": "data-ad-client=ca-pub-8934204454340791",
+    "3553-behappy": "data-ad-client=ca-pub-8934204454340791",
+    "3553-91games": "data-ad-client=ca-pub-8934204454340791",
+    "3553-cpsense": "data-ad-client=ca-pub-8934204454340791",
+    "3553-cpsense-cd": "data-ad-client=ca-pub-8934204454340791",
+    "3884-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3884-91games": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3884-cpsense": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3884-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3884-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "4073-marketjs": "/68700844/nor0308/Incentive-01-nor0308",
+    "4073-behappy": "/68700844/nor0308/Incentive-01-nor0308",
+    "4073-91games": "/68700844/nor0308/Incentive-01-nor0308",
+    "4073-cpsense": "/68700844/nor0308/Incentive-01-nor0308",
+    "4073-cpsense-cd": "/68700844/nor0308/Incentive-01-nor0308",
+    "3887-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3887-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3887-91games": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3887-cpsense": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3887-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-91games": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-cpsense": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "marketjs": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=7942679940",
+    "behappy": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=1678988102",
+    "91games": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=1916701377",
+    "cpsense": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=9810653203",
+    "cpsense-cd": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=5196620779",
+    "default_ads": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=3969174711"
+};
