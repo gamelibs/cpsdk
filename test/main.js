@@ -1,7 +1,3 @@
-// Vite前端入口文件
-import './style.css';
-
-
 
 const readyButton = document.getElementById('ready');
 const beforeAdButton = document.getElementById('before-ad');
@@ -134,7 +130,9 @@ const showAd = (type) => {
     }
 
   }
+  // if ("interstitialAd") {
 
+  // }
 
 
 };
