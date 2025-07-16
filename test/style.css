@@ -1,57 +1,115 @@
 body {
   font-family: Arial, sans-serif;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
   margin: 0;
+  padding: 0;
   background-color: #f4f4f4;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .container {
   text-align: center;
   background-color: white;
   padding: 20px;
-  border-radius: 5px;
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  width: 90%;
+  max-width: 700px;
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .display-area {
-  width: 600px;
-  height: 400px;
-  background-color: #eaeaea;
+  width: 100%;
+  height: 250px;
+  background-color: #e0e0e0;
   margin-bottom: 20px;
   border-radius: 10px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
 .button-group {
-  display: flex;
-  justify-content: space-around;
-  margin-bottom: 10px;
+  display: grid;
+  gap: 15px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.main-buttons {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.ad-type-buttons {
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  margin-top: 20px;
 }
 
 button {
-  padding: 10px 20px;
+  padding: 12px 20px;
   cursor: pointer;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  background-color: #f9f9f9;
-  transition: background-color 0.3s ease;
+  border: none;
+  border-radius: 25px; /* 更圆润的边角 */
+  background: linear-gradient(45deg, #994caf, #7b45a0); /* 渐变绿色 */
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  width: 100%; /* 填充网格但不顶边 */
+  max-width: 180px; /* 限制最大宽度 */
+  margin: 0 auto; /* 居中按钮 */
 }
 
 button:hover {
-  background-color: #eaeaea;
+  background: linear-gradient(45deg, #45a049, #388e3c);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 button.active {
-  background-color: #ccffcc; /* 浅绿色背景 */
-  border-color: #4CAF50; /* 深绿色边框 */
-  color: #333; /* 文字颜色 */
+  background: linear-gradient(45deg, #81c784, #66bb6a);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 #adcontent {
   width: 100%;
   height: 100%;
   position: fixed;
-  z-index: 1;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  background: #000;
+  display: none;
+}
+
+/* 移动端样式 */
+@media (max-width: 600px) {
+  .container {
+    padding: 15px;
+  }
+
+  .display-area {
+    height: 180px;
+  }
+
+  .main-buttons {
+    grid-template-columns: 1fr; /* 垂直排列 */
+  }
+
+  .ad-type-buttons {
+    grid-template-columns: 1fr; /* 垂直排列 */
+    margin-top: 15px;
+  }
+
+  button {
+    font-size: 14px;
+    padding: 10px 15px;
+    max-width: 150px;
+  }
 }

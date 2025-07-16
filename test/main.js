@@ -16,8 +16,9 @@ const ACTIVE_CLASS = 'active';
 // 初始化广告
 const adSdkConfig = {
   // client: 'Preroll',
-  // client: 'gpt'
+  // client: '4073-cpsense' //gpt
   client: '316-marketjs'//adx
+  // client: 'cpsense'//adx
 }
 
 const adInstance = new adSdk(adSdkConfig);

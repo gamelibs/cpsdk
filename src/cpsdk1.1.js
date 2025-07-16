@@ -7,6 +7,7 @@
  * 只有adsense有首次判定is_first
  * 修改首次广告为preroll(20250703)
  * 修复adx重复创建容器BUG(20250714)
+ * 修复gpt上报reward事件BUG(20250716)
  */
 
 class adSdk {
@@ -139,7 +140,7 @@ class adSdk {
 
         this._eventAds.on('beforeAd', (param1, param2) => {
 
-            if (this.adx_type === "rewardedAd" || param1 === "rewardedAd") {
+            if (this.adx_type === "rewardedAd" || this.gpt_type === "rewardedAd" || param1 === "rewardedAd") {
                 window.gtag('event', 'game_reward_open', { send: 'sdk', 'ad_type': this.adType });
 
             } else {
