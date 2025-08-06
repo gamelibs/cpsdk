@@ -13,6 +13,8 @@ Terser是一个流行的JavaScript压缩工具：
 
 terser /Users/vidar/ovo/presdk2/src/cpsdk1.1.js -o /Users/vidar/ovo/presdk2/src/cpsdk1.1.min.js -c -m
 
+terser /Users/vidar/ovo/presdk2/src/cpsdk1.2.js -o /Users/vidar/ovo/presdk2/src/cpsdk1.2.min.js -c -m
+
  让我们验证压缩文件是否已经创建成功： 
  ls -la /Users/vidar/ovo/presdk2/src/cpsdk1.1*.js
 

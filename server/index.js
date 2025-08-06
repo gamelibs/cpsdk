@@ -31,7 +31,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 // 提供静态资源服务（test 文件夹）
-app.use(express.static(resolve(__dirname, '../test')));
+app.use(express.static(resolve(__dirname, '../')));
 
 // API 示例
 app.get('/api/hello', (req, res) => {

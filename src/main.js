@@ -1,7 +1,5 @@
-// Vite前端入口文件
-import './style.css';
-
-
+// 游戏页面主脚本文件
+// 注意：CSS文件已在HTML中通过link标签引入，这里不需要import
 
 const readyButton = document.getElementById('ready');
 const beforeAdButton = document.getElementById('before-ad');
@@ -23,6 +21,7 @@ const adSdkConfig = {
   client: '4073-cpsense' //gpt
   // client: '316-marketjs'//adx
   // client: 'cpsense'//
+  // client:'3942-91games'
 }
 
 const adInstance = new adSdk(adSdkConfig);

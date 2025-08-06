@@ -17,8 +17,8 @@ const ACTIVE_CLASS = 'active';
 const adSdkConfig = {
   // client: 'Preroll',
   // client: '4073-cpsense' //gpt
-  client: '316-marketjs'//adx
-  // client: 'cpsense'//adx
+  // client: '316-marketjs'//adx
+  client: 'cpsense'//adx
 }
 
 const adInstance = new adSdk(adSdkConfig);
