@@ -98,6 +98,9 @@
       margin-top: 60px;
       width: 100vw;
       height: calc(100vh - 60px);
+      position: relative;
+      overflow: hidden;
+      box-sizing: border-box;
     }
 
     iframe {
@@ -105,6 +108,43 @@
       width: 100%;
       height: 100%;
       display: block;
+      overflow: hidden;
+      /* 确保iframe内容完全适配，无滚动条 */
+      transform: scale(1);
+      transform-origin: top left;
+      box-sizing: border-box;
+    }
+
+    /* 移动端适配 */
+    @media (max-width: 768px) {
+      .iframe-container {
+        margin-top: 60px;
+        width: 100vw;
+        height: calc(100vh - 60px);
+        height: calc(100dvh - 60px); /* 动态视口高度，适配移动端地址栏 */
+      }
+    }
+
+    /* 横屏适配 */
+    @media (orientation: landscape) and (max-height: 500px) {
+      .top-control-bar {
+        height: 40px;
+      }
+      
+      .iframe-container {
+        margin-top: 40px;
+        height: calc(100vh - 40px);
+        height: calc(100dvh - 40px);
+      }
+      
+      .control-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+      
+      .top-control-bar h1 {
+        font-size: 16px;
+      }
     }
 
     /* 日志显示区域 */
@@ -154,7 +194,7 @@
 
   <!-- iframe 容器 -->
   <div class="iframe-container">
-    <iframe id="gameFrame" src="../game/index.html?vb=beta" allowfullscreen></iframe>
+    <iframe id="gameFrame" src="../game/index.html?vb=beta" allowfullscreen scrolling="no" seamless style="overflow: hidden;"></iframe>
     <!-- <iframe src="../game/SnipingAliens/index.html" allowfullscreen></iframe> -->
   </div>
 
@@ -175,7 +215,90 @@
   <script type="module" src="/src/main.js"></script> -->
 
   <script type="text/javascript">
+    // iframe自适应脚本
+    function setupIframeResponsive() {
+      const iframe = document.getElementById('gameFrame');
+      const container = document.querySelector('.iframe-container');
+      
+      function adjustIframe() {
+        if (iframe && container) {
+          // 确保iframe完全填充容器
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.style.overflow = 'hidden';
+          
+          // 移除iframe内部的滚动条
+          iframe.onload = function() {
+            try {
+              const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+              if (iframeDoc) {
+                const style = iframeDoc.createElement('style');
+                style.textContent = `
+                  html, body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    overflow: hidden !important;
+                    width: 100% !important;
+                    height: 100% !important;
+                    box-sizing: border-box !important;
+                  }
+                  * {
+                    box-sizing: border-box !important;
+                  }
+                `;
+                iframeDoc.head.appendChild(style);
+              }
+            } catch (e) {
+              // 跨域限制，无法访问iframe内容
+              console.log('Cross-origin iframe, cannot modify styles');
+            }
+          };
+        }
+      }
+      
+      // 页面加载后调整
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', adjustIframe);
+      } else {
+        adjustIframe();
+      }
+      
+      // 窗口大小变化时重新调整
+      window.addEventListener('resize', adjustIframe);
+      
+      // 监听设备方向变化
+      window.addEventListener('orientationchange', function() {
+        setTimeout(adjustIframe, 100);
+      });
+    }
     
+    // 重载iframe函数
+    function reloadIframe() {
+      const iframe = document.getElementById('gameFrame');
+      if (iframe) {
+        iframe.src = iframe.src;
+      }
+    }
+    
+    // 其他控制函数
+    function toggleLog() {
+      const logPanel = document.getElementById('logPanel');
+      logPanel.classList.toggle('show');
+    }
+    
+    function testMainWindowClick() {
+      console.log('主窗口点击测试');
+    }
+    
+    function clearLogs() {
+      const logContent = document.getElementById('logContent');
+      if (logContent) {
+        logContent.innerHTML = '';
+      }
+    }
+    
+    // 初始化
+    setupIframeResponsive();
   </script>
 </body>
 

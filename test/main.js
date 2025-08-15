@@ -1,16 +1,25 @@
 
-const readyButton = document.getElementById('ready');
-const beforeAdButton = document.getElementById('before-ad');
-const afterAdButton = document.getElementById('after-ad');
-const adDismissedButton = document.getElementById('adDismissed');
-const adViewedButton = document.getElementById('adViewed');
-const errorButton = document.getElementById('error');
-const interstitialButton = document.getElementById('interstitial');
-const rewardedButton = document.getElementById('rewarded');
-const startButton = document.getElementById('start');
-const ACTIVE_CLASS = 'active';
+// const readyButton = document.getElementById('ready');
+// const beforeAdButton = document.getElementById('before-ad');
+// const afterAdButton = document.getElementById('after-ad');
+// const adDismissedButton = document.getElementById('adDismissed');
+// const adViewedButton = document.getElementById('adViewed');
+// const errorButton = document.getElementById('error');
+// const interstitialButton = document.getElementById('interstitial');
+// const rewardedButton = document.getElementById('rewarded');
+// const startButton = document.getElementById('start');
+// const ACTIVE_CLASS = 'active';
 
-
+const readyButton =null;
+const beforeAdButton =null;
+const afterAdButton =null;
+const adDismissedButton =null;
+const adViewedButton =null;
+const errorButton =null;
+const interstitialButton =null;
+const rewardedButton =null;
+const startButton =null;
+const ACTIVE_CLASS =null;
 
 
 // 初始化广告
