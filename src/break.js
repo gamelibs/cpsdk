@@ -178,7 +178,7 @@ function break_abc(data) {
 
     game_rank_mask.addEventListener('click', function (e) {
         if (e.target === e.currentTarget) {
-            // game_rank_mask.style.display = 'none'
+            game_rank_mask.style.display = 'none'
         }
     })
     function handleMove(event) {
@@ -208,7 +208,7 @@ function break_abc(data) {
     if (isTouchDevice) {
         /* 触摸设备的事件监听 */
         movableElement.addEventListener('touchstart', function (event) {
-            console.log('touchstart triggered');
+            // console.log('touchstart triggered');
             if (event.touches && event.touches.length === 1) {
                 startX = event.touches[0].clientX;
                 startY = event.touches[0].clientY;
@@ -221,7 +221,7 @@ function break_abc(data) {
             handleMove(event);
         });
         movableElement.addEventListener('touchend', function (event) {
-            console.log('touchend triggered');
+            // console.log('touchend triggered');
             if (event.changedTouches && event.changedTouches.length > 0) {
                 let endX = event.changedTouches[0].clientX;
                 let endY = event.changedTouches[0].clientY;
@@ -229,13 +229,13 @@ function break_abc(data) {
 
                 if (!drageable || distance < 10) {
 
-                    console.log('Detected as CLICK - opening modal');
+                    // console.log('Detected as CLICK - opening modal');
                     setTimeout(()=>{
                         game_rank_mask.style.display = 'block';
                     },10)
 
                 } else {
-                    console.log('Detected as DRAG - not opening modal');
+                    // console.log('Detected as DRAG - not opening modal');
                 }
             } else if (!drageable) {
 
