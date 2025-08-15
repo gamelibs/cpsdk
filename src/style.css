@@ -54,16 +54,21 @@ button {
   padding: 12px 20px;
   cursor: pointer;
   border: none;
-  border-radius: 25px; /* 更圆润的边角 */
-  background: linear-gradient(45deg, #994caf, #7b45a0); /* 渐变绿色 */
+  border-radius: 25px;
+  /* 更圆润的边角 */
+  background: linear-gradient(45deg, #994caf, #7b45a0);
+  /* 渐变绿色 */
   color: white;
   font-size: 16px;
   font-weight: 500;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
-  width: 100%; /* 填充网格但不顶边 */
-  max-width: 180px; /* 限制最大宽度 */
-  margin: 0 auto; /* 居中按钮 */
+  width: 100%;
+  /* 填充网格但不顶边 */
+  max-width: 180px;
+  /* 限制最大宽度 */
+  margin: 0 auto;
+  /* 居中按钮 */
 }
 
 button:hover {
@@ -99,11 +104,13 @@ button.active {
   }
 
   .main-buttons {
-    grid-template-columns: 1fr; /* 垂直排列 */
+    grid-template-columns: 1fr;
+    /* 垂直排列 */
   }
 
   .ad-type-buttons {
-    grid-template-columns: 1fr; /* 垂直排列 */
+    grid-template-columns: 1fr;
+    /* 垂直排列 */
     margin-top: 15px;
   }
 
@@ -111,5 +118,54 @@ button.active {
     font-size: 14px;
     padding: 10px 15px;
     max-width: 150px;
+  }
+}
+
+/* 移动端按钮适配 */
+@media (max-width: 768px) {
+  .top-control-bar {
+    height: 48px;
+    padding: 0 8px;
+  }
+
+  .control-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+    min-width: 60px;
+    border-radius: 18px;
+    margin: 0 2px;
+    touch-action: manipulation;
+  }
+
+  .control-right {
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .control-left h1 {
+    font-size: 15px;
+  }
+}
+
+/* 超小屏适配 */
+@media (max-width: 480px) {
+  .top-control-bar {
+    height: 40px;
+    padding: 0 2px;
+  }
+
+  .control-btn {
+    padding: 4px 6px;
+    font-size: 12px;
+    min-width: 48px;
+    border-radius: 14px;
+  }
+
+  .control-right {
+    gap: 2px;
+  }
+
+  .control-left h1 {
+    font-size: 13px;
   }
 }

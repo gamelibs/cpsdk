@@ -1,10 +1,16 @@
-function break_abc (data){
-    if (data.link === '' && data.data.length === 0) { return }
+
+
+function break_abc(data) {
+    if (data.link === '' && data.data.length === 0) {
+        return
+    }
     data = data || {
         data: [],
     };
     let container = document.querySelector('body');
-    if (!container.offsetHeight) { container.style.height = '100vh' }
+    if (!container.offsetHeight) {
+        container.style.height = '100vh'
+    }
     let movableElement = document.createElement('a');
     movableElement.href = 'javascript:;';
     movableElement.style = 'display: block;width: 48px;height: 48px;border-radius: 12px;overflow: hidden;position: fixed;z-index: 888888;bottom: 100px;left: 10px;margin:0;pading:0;box-size:border-box;';
@@ -14,8 +20,10 @@ function break_abc (data){
     movableElementImg.width = 48
     movableElement.appendChild(movableElementImg);
     document.body.appendChild(movableElement);
-    let isTouchDevice = 'ontouchstart' in window; /* 判断是否为触摸设备 */
+    let isTouchDevice = 'ontouchstart' in window;
+    /* 判断是否为触摸设备 */
     let drageable = false;
+    let startX = 0, startY = 0; /* 触摸开始位置 */
     let game_rank_mask = document.createElement("div");
     game_rank_mask.style = 'position: fixed;left: 0;font-family: "Microsoft YaHei";top: 0;width: 100%;height: 100%;z-index: 999999;display: none;background-color: rgba(0,0,0,.85);';
 
@@ -26,9 +34,10 @@ function break_abc (data){
     } else {
         game_rank_mask_content.style = 'width: 100%;max-width: 600px;position: absolute;background: #22075E;left: 50%;bottom: 0;transform: translateX(-50%);border-radius: 16px 16px 0 0;padding:0 16px;height:calc(100% - 64px);'
         let game_rank_pat = document.createElement('div');
-        game_rank_pat.style = 'padding: 16px 0 0;display: flex;align-items: stretch;flex-direction: column;' +
-            'height:calc(100% - 100px);';
-        if (data.link === '') { game_rank_pat.style.height = '100%' }
+        game_rank_pat.style = 'padding: 16px 0 0;display: flex;align-items: stretch;flex-direction: column;' + 'height:calc(100% - 100px);';
+        if (data.link === '') {
+            game_rank_pat.style.height = '100%'
+        }
         game_rank_mask_content.appendChild(game_rank_pat)
         let game_rank_pat_title = document.createElement('h1')
         game_rank_pat_title.innerText = 'RANKING'
@@ -136,7 +145,9 @@ function break_abc (data){
     close_game_rank_mask_img.width = 24;
     close_game_rank_mask.appendChild(close_game_rank_mask_img);
     game_rank_mask_content.appendChild(close_game_rank_mask);
-    close_game_rank_mask.onclick = function () { game_rank_mask.style.display = 'none' }
+    close_game_rank_mask.onclick = function () {
+        game_rank_mask.style.display = 'none'
+    }
     if (data.link !== '') {
         let drainage = document.createElement('div');
         drainage.style = 'padding: 16px 0;display: flex;align-items: center;justify-content: space-between;';
@@ -164,14 +175,16 @@ function break_abc (data){
         game_rank_mask_content.appendChild(drainage)
     }
     document.body.appendChild(game_rank_mask);
+
     game_rank_mask.addEventListener('click', function (e) {
         if (e.target === e.currentTarget) {
-            game_rank_mask.style.display = 'none'
+            // game_rank_mask.style.display = 'none'
         }
     })
     function handleMove(event) {
         drageable = true;
-        var touch = event.touches ? event.touches[0] : event; /* 兼容触摸和鼠标事件 */
+        var touch = event.touches ? event.touches[0] : event;
+        /* 兼容触摸和鼠标事件 */
         var newLeft = touch.clientX - container.getBoundingClientRect().left - movableElement.offsetWidth / 2;
         var newTop = touch.clientY - container.getBoundingClientRect().top - movableElement.offsetHeight / 2;
 
@@ -195,15 +208,35 @@ function break_abc (data){
     if (isTouchDevice) {
         /* 触摸设备的事件监听 */
         movableElement.addEventListener('touchstart', function (event) {
-            if (event.cancelable) event.preventDefault(); /* 阻止默认行为，如滚动 */
-
+            console.log('touchstart triggered');
+            if (event.touches && event.touches.length === 1) {
+                startX = event.touches[0].clientX;
+                startY = event.touches[0].clientY;
+                drageable = false;
+            }
         });
         movableElement.addEventListener('touchmove', function (event) {
+
             if (event.cancelable) event.preventDefault(); /* 阻止默认行为，如滚动 */
             handleMove(event);
         });
         movableElement.addEventListener('touchend', function (event) {
-            if (!drageable) {
+            console.log('touchend triggered');
+            if (event.changedTouches && event.changedTouches.length > 0) {
+                let endX = event.changedTouches[0].clientX;
+                let endY = event.changedTouches[0].clientY;
+                let distance = Math.abs(endX - startX) + Math.abs(endY - startY);
+
+                if (!drageable || distance < 10) {
+
+                    console.log('Detected as CLICK - opening modal');
+                    game_rank_mask.style.display = 'block';
+
+                } else {
+                    console.log('Detected as DRAG - not opening modal');
+                }
+            } else if (!drageable) {
+
                 game_rank_mask.style.display = 'block';
             }
             drageable = false;
@@ -211,7 +244,8 @@ function break_abc (data){
     } else {
         /* 非触摸设备的事件监听 */
         movableElement.addEventListener('mousedown', function (event) {
-            event.preventDefault(); /* 阻止默认行为，如选中文本 */
+            event.preventDefault();
+            /* 阻止默认行为，如选中文本 */
             document.addEventListener('mousemove', handleMove);
         });
         document.addEventListener('mouseup', function () {
@@ -224,5 +258,6 @@ function break_abc (data){
             drageable = false;
         });
     }
+
 
 }

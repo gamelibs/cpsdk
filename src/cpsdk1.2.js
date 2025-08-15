@@ -265,7 +265,7 @@ class adSdk {
 
         // loadScript('https://www.cpsense.com/public/sdk_rank.js')
         // loadScript('http://192.168.1.154:8818/src/rank.js')
-        loadScript('http://192.168.1.154:8818/src/break2.js')
+        loadScript('http://192.168.1.154:8818/src/break.js')
             .then((res) => {
                 const gameId = this.gameid;
                 const pubId = this.pubid;

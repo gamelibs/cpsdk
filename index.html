@@ -169,6 +169,49 @@
     .log-panel.show {
       display: block;
     }
+
+        /* 移动端按钮适配 */
+    @media (max-width: 768px) {
+      .top-control-bar {
+        height: 48px;
+        padding: 0 8px;
+      }
+      .control-btn {
+        padding: 6px 10px;
+        font-size: 13px;
+        min-width: 60px;
+        border-radius: 18px;
+        margin: 0 2px;
+        touch-action: manipulation;
+      }
+      .control-right {
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+      .control-left h1 {
+        font-size: 15px;
+      }
+    }
+
+    /* 超小屏适配 */
+    @media (max-width: 480px) {
+      .top-control-bar {
+        height: 40px;
+        padding: 0 2px;
+      }
+      .control-btn {
+        padding: 4px 6px;
+        font-size: 12px;
+        min-width: 48px;
+        border-radius: 14px;
+      }
+      .control-right {
+        gap: 2px;
+      }
+      .control-left h1 {
+        font-size: 13px;
+      }
+    }
   </style>
 </head>
 
