@@ -230,7 +230,9 @@ function break_abc(data) {
                 if (!drageable || distance < 10) {
 
                     console.log('Detected as CLICK - opening modal');
-                    game_rank_mask.style.display = 'block';
+                    setTimeout(()=>{
+                        game_rank_mask.style.display = 'block';
+                    },10)
 
                 } else {
                     console.log('Detected as DRAG - not opening modal');
