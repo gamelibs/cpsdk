@@ -263,27 +263,24 @@ class adSdk {
             });
         }
 
-        // loadScript('https://www.cpsense.com/public/sdk_rank.js')
-        // loadScript('http://192.168.1.154:8818/src/rank.js')
-        loadScript('http://192.168.1.154:8818/src/break.js')
+        loadScript('https://www.cpsense.com/public/sdk_rank.js')
             .then((res) => {
                 const gameId = this.gameid;
                 const pubId = this.pubid;
-                // if (gameId && pubId) {
+                if (gameId && pubId) {
 
-                //     this._ajax("https://api.douyougame.com/interest/ranking/" + gameId + "/" + pubId, "GET", "").then(A => {
+                    this._ajax("https://api.douyougame.com/interest/ranking/" + gameId + "/" + pubId, "GET", "").then(A => {
 
-                //         if (typeof break_abc === 'function') break_abc(A);
+                        if (typeof break_abc === 'function') break_abc(A);
 
-                //     }).catch(error => {
-                //         console.log("Error fetching data:", error);
-                //         if (typeof break_abc === 'function') break_abc({ data: [], link: 'https://www.likebox.top' });
-                //     });
+                    }).catch(error => {
+                        console.log("Error fetching data:", error);
+                        if (typeof break_abc === 'function') break_abc({ data: [], link: 'https://www.likebox.top' });
+                    });
 
-                // } else {
-                //     if (typeof break_abc === 'function') break_abc({ data: [], link: 'https://www.likebox.top' });
-                // }
-                break_abc({ data: [], link: 'https://www.likebox.top' });
+                } else {
+                    if (typeof break_abc === 'function') break_abc({ data: [], link: 'https://www.likebox.top' });
+                }
             })
             .catch(err => {
 
