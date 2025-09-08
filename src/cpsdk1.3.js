@@ -30,7 +30,9 @@ class adSdk {
                 'interstitial': [],
                 'reward': [],
                 'game_score': [],
-                'game_level': []
+                'game_level': [],
+                'level_start': [],
+                'level_end': []
             },
             on(eventName, callback) {
                 if (!this.listeners[eventName]) {
@@ -213,6 +215,15 @@ class adSdk {
                 type: 'GAME_LEVEL',
                 value: data.level
             });
+        })
+        
+        // 汇总游戏状态
+        this._eventAds.on('level_end', (data) => {
+            this.__sdklog3("level_end", data)
+            this.adsdklayer.push({ 
+                type: 'LEVEL_END', 
+                value: data
+            })
         })
 
         try {
