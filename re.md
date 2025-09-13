@@ -34,6 +34,10 @@ npm install -g javascript-obfuscator
 
 javascript-obfuscator /Users/vidar/ovo/presdk2/src/cpsdk1.0.js --output /Users/vidar/ovo/presdk2/src/cpsdk1.0.obf.js --identifier-names-generator mangled --reserved-names "nadSdk" --self-defending true
 
+基础混淆（推荐默认）	javascript-obfuscator src/index.js -o dist/index.obf.js	使用工具默认参数：自动压缩代码、缩短变量名、基础字符串加密，满足轻量保护。
+仅压缩（不深度混淆）	javascript-obfuscator src/index.js -o dist/index.min.js --compact true --mangle false	只删除空格、合并代码（类似 terser 压缩），不修改变量名 / 逻辑，适合仅需减小体积。
+禁止压缩（仅混淆）	javascript-obfuscator src/index.js -o dist/index.obf.js --compact false	保留代码格式（换行、空格），但对变量 / 字符串进行混淆，方便调试混淆逻辑。
+
 ### 检查生成文件的情况
 
 让我们比较原始文件和所有压缩/混淆后的文件大小： ## 总结和建议

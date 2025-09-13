@@ -1,3 +1,4 @@
+
 class iframeSdk {
     constructor() {
         this.pushtime = 1; // 默认推送间隔，单位秒
@@ -11,7 +12,16 @@ class iframeSdk {
                 'game_time': [],
                 'game_score': [],
                 'game_level': [],
-                'level_end': []
+                'level_end': [],
+                'interstitial': [],
+                'reward': [],
+                'interstitial_open': [],
+                'interstitial_viewed': [],
+                'before_ad': [],
+                'after_ad': [],
+                'reward_dismissed': [],
+                'reward_viewed': [],
+                'ad_error': [],
             },
             on(eventName, callback) {
                 if (!this.listeners[eventName]) return;
@@ -36,7 +46,91 @@ class iframeSdk {
         try {
             this.__sdklog3('iframeSdk 初始化成功');
         } catch (e) {
-            this.__sdklog3('iframeSdk 初始化日志打印失败', e && e.message);
+            this.__sdklog3('iframeSdk 初始化失败', e && e.message);
+        }
+    }
+
+
+    /**
+     * 处理新的ifamesdkmessage格式消息
+     * @param {Array} messageArray - 包含多个事件的数组
+     */
+    handleifamesdkMessage(messageArray) {
+        // this.__sdklog3('[GameStatus] 收到包含', messageArray.length, '个事件');
+
+        messageArray.forEach(message => {
+            this.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
+            try {
+                switch (message.type) {
+                    case 'GAME_TIME':
+
+                        this.events_iframe.emit('game_time', message.value);
+                        break;
+                    case 'GAME_SCORE':
+
+                        this.events_iframe.emit('game_score', message.value);
+                        break;
+                    case 'GAME_LEVEL':
+
+                        this.events_iframe.emit('game_level', message.value);
+                        break;
+                    case 'LEVEL_END':
+
+                        this.events_iframe.emit('level_end', message.value);
+                        this.events_iframe.emit('game_score', message.value.score);
+                        this.events_iframe.emit('game_level', message.value.level || message.value.level_name);
+                        break;
+                    case 'GAME_STATUS':
+                        // 处理完整状态更新
+                        if (message.value && typeof message.value === 'object') {
+                            if (message.value.time !== undefined) this.__sdklog3(message.value.time)
+                            if (message.value.score !== undefined) this.__sdklog3(message.value.score)
+                            if (message.value.level !== undefined) this.__sdklog3(message.value.level)
+                        }
+                        break;
+                    default:
+                        this.events_iframe.emit(message.type, message.value);
+                }
+            } catch (error) {
+                console.warn('[GameStatus] 处理消息失败:', message, error);
+            }
+        });
+    }
+
+
+    /**
+     * 向 iframe 中的 SDK 发送 pushtime 更新
+     * @param {number} seconds
+     */
+    setSdkPushTime(seconds, target) {
+        // normalize target
+        let win = null;
+        if (!target) {
+            const el = document.getElementById('game-preview');
+            if (el && el.tagName === 'IFRAME') {
+                win = el.contentWindow;
+            }
+        } else if (typeof target === 'string') {
+            const el = document.getElementById(target);
+            if (el && el.tagName === 'IFRAME') win = el.contentWindow;
+        } else if (target instanceof Window) {
+            win = target;
+        } else if (target && target.tagName === 'IFRAME') {
+            win = target.contentWindow;
+        }
+
+        if (!win) {
+            console.warn('[IframeSdk] send failed: no target iframe found');
+            return false;
+        }
+
+        try {
+            win.postMessage({ type: 'iframecommand', command: 'SET_PUSHTIME', value: Number(seconds) || 1 }, '*');
+            console.log('[IframeSdk] sent SET_PUSHTIME to', target || 'game-preview');
+            return true;
+        } catch (e) {
+            console.warn('[IframeSdk] postMessage error', e);
+            return false;
         }
     }
 
@@ -127,73 +221,10 @@ class iframeSdk {
         this.__sdklog3('[GameStatus] 消息监听器已设置');
     }
 
-    /**
-     * 处理新的ifamesdkmessage格式消息
-     * @param {Array} messageArray - 包含多个事件的数组
-     */
-    handleifamesdkMessage(messageArray) {
-        this.__sdklog3('[GameStatus] 收到包含', messageArray.length, '个事件');
-
-        messageArray.forEach(message => {
-            this.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
-            try {
-                switch (message.type) {
-                    case 'GAME_TIME':
-
-                        // 封闭的事件总线 emit（不暴露到 window）
-                        this.events_iframe.emit('game_time', message.value);
-                        break;
-                    case 'GAME_SCORE':
-
-                        this.events_iframe.emit('game_score', message.value);
-                        break;
-                    case 'GAME_LEVEL':
-
-                        this.events_iframe.emit('game_level', message.value);
-                        break;
-                    case 'LEVEL_END':
-
-                        this.events_iframe.emit('level_end', message.value);
-                        break;
-                    case 'GAME_STATUS':
-                        // 处理完整状态更新
-                        if (message.value && typeof message.value === 'object') {
-                            if (message.value.time !== undefined) this.__sdklog3(message.value.time)
-                            if (message.value.score !== undefined) this.__sdklog3(message.value.score)
-                            if (message.value.level !== undefined) this.__sdklog3(message.value.level)
-                        }
-                        break;
-                    default:
-                        this.__sdklog3('[GameStatus] 未知消息类型:', message.type);
-                }
-            } catch (error) {
-                console.warn('[GameStatus] 处理消息失败:', message, error);
-            }
-        });
-    }
-
-
-    /**
-     * 向 iframe 中的 SDK 发送 pushtime 更新
-     * @param {number} seconds
-     */
-    setSdkPushTime(seconds) {
-        const iframe = document.getElementById('game-preview');
-        if (!iframe) return;
-
-        try {
-            const v = Number(seconds) || 1;
-            // 使用统一命令格式 ifamesdkcommand，子页面 sdk 会监听并处理
-            iframe.contentWindow.postMessage({ type: 'iframecommand', command: 'SET_PUSHTIME', value: v }, '*');
-            this.__sdklog3('[Preview] 已向 iframe 发送 SET_PUSHTIME:', v);
-        } catch (e) {
-            console.warn('[Preview] 发送 SET_PUSHTIME 失败:', e && e.message);
-        }
-    }
 }
 
 
-const IframeSdk = new iframeSdk();
+var IframeSdk = new iframeSdk();
 
 // 将 setSdkPushTime 绑定到实例上，确保正确的 this
 window.setSdkPushTime = IframeSdk.setSdkPushTime.bind(IframeSdk);

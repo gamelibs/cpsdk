@@ -100,8 +100,10 @@ class adSdk {
         this.adsdklayer = [];
         this._messageCheckInterval = null;
         this._gameTime = 0;
-        this.pushtime = 1; // 默认1秒发一次
+        // 最大30秒发一次 - must set before calling the pushtime setter
         this._maxPushTime = 30; // 最大30秒发一次
+        // 默认推送间隔（秒） - assign internal backing field directly to avoid running setter during construction
+        this._pushtime = 3; // 默认3秒发一次
 
         this.adx_callback = {
             error: () => { },
@@ -139,21 +141,36 @@ class adSdk {
         this._eventAds.on('interstitial', (param1) => {
             window.gtag('event', 'game_interstitialad', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog(param1, this.adType);
+            this.adsdklayer.push({
+                type: 'interstitial',
+                value: 1
+            })
         })
 
         this._eventAds.on('reward', (param1) => {
             window.gtag('event', 'game_reward', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog(param1, this.adType);
+            this.adsdklayer.push({
+                type: 'reward',
+                value: 1
+            })
         })
 
         this._eventAds.on('beforeAd', (param1, param2) => {
 
             if (this.adx_type === "rewardedAd" || this.gpt_type === "rewardedAd" || param1 === "rewardedAd") {
                 window.gtag('event', 'game_reward_open', { send: 'sdk', 'ad_type': this.adType });
-
+                this.adsdklayer.push({
+                    type: 'reward_open',
+                    value: 1
+                })
             } else {
 
                 window.gtag('event', 'game_interstitialad_open', { send: 'sdk', 'ad_type': this.adType });
+                this.adsdklayer.push({
+                    type: 'interstitial_open',
+                    value: 1
+                })
             }
             this.__sdklog2("*******adevent**********", param1, param2, this.adType);
         })
@@ -161,16 +178,28 @@ class adSdk {
         this._eventAds.on('adDismissed', (param1) => {
             window.gtag('event', 'game_reward_dismissed', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog2("*******adevent**********", param1, this.adType);
+            this.adsdklayer.push({
+                type: 'reward_dismissed',
+                value: 1
+            })
         })
 
         this._eventAds.on('adViewed', (param1) => {
             window.gtag('event', 'game_reward_viewed', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog2("*******adevent**********", param1, this.adType);
+            this.adsdklayer.push({
+                type: 'reward_viewed',
+                value: 1
+            })
         })
 
         this._eventAds.on('afterAd', (param1, param2) => {
             window.gtag('event', 'game_interstitialad_viewed', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog2("*******adevent**********", param1, param2, this.adType);
+            this.adsdklayer.push({
+                type: 'interstitial_viewed',
+                value: 1
+            })
         })
 
         this._eventAds.on('error', (param1, param2) => {
@@ -186,12 +215,20 @@ class adSdk {
                 case 'frequencyinterstitialAd':
                 case 'other':
                     window.gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
+                    this.adsdklayer.push({
+                        type: 'ad_error',
+                        value: param2
+                    })
                     break;
                 case 'viewed':
                 case 'dismissed':
                     break;
                 default:
                     window.gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
+                    this.adsdklayer.push({
+                        type: 'ad_error',
+                        value: param2
+                    })
                     break;
             }
             if (param2 !== 'viewed' && param2 !== 'dismissed') {
@@ -216,12 +253,12 @@ class adSdk {
                 value: data.level
             });
         })
-        
+
         // 汇总游戏状态
         this._eventAds.on('level_end', (data) => {
             this.__sdklog3("level_end", data)
-            this.adsdklayer.push({ 
-                type: 'LEVEL_END', 
+            this.adsdklayer.push({
+                type: 'LEVEL_END',
                 value: data
             })
         })
@@ -303,8 +340,8 @@ class adSdk {
                         this.pushtime = v;
                         this.__sdklog('[adsdk] 收到父页面 SET_PUSHTIME:', v);
                     }
-                } catch (e) { 
-                    configole.log('message event err', e);
+                } catch (e) {
+                    console.log('message event err', e);
                 }
             });
         } catch (e) { }
