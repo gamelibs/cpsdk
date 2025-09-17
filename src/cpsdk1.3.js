@@ -16,8 +16,6 @@ class adSdk {
         this.dev_name = new URLSearchParams(document.location.search).get("dev") || this.config.client || 'default';
         this.gamePlayTimer = null;
         // this.dotData = {};
-        this._insert_tagmanager();
-
 
         this._eventAds = {
             listeners: {
@@ -95,16 +93,6 @@ class adSdk {
         this.adx_isLoaded = false;
         this.adxLoadTimeout = null; // ADX广告加载超时计时器
 
-        //message
-        // 消息队列系统
-        this.adsdklayer = [];
-        this._messageCheckInterval = null;
-        this._gameTime = 0;
-        // 最大30秒发一次 - must set before calling the pushtime setter
-        this._maxPushTime = 30; // 最大30秒发一次
-        // 默认推送间隔（秒） - assign internal backing field directly to avoid running setter during construction
-        this._pushtime = 3; // 默认3秒发一次
-
         this.adx_callback = {
             error: () => { },
             beforeAd: () => { },
@@ -126,10 +114,30 @@ class adSdk {
             afterAd: () => { },
             adViewed: () => { },
             adDismissed: () => { }
+        }; ``
+
+        //message
+        // 消息队列系统
+        this.adsdklayer = [];
+        this._messageCheckInterval = null;
+        this._gameTime = 0;
+        // 最大30秒发一次 - must set before calling the pushtime setter
+        this._maxPushTime = 30; // 最大30秒发一次
+        // 默认推送间隔（秒） - assign internal backing field directly to avoid running setter during construction
+        this._pushtime = 3; // 默认3秒发一次
+
+        window.AndroidEventCallBack = function (callbackData) {
+            try {
+                const data = JSON.parse(callbackData);
+
+                console.log('AndroidData:', data)
+            } catch (e) {
+                console.error('❌ 回调数据解析失败: ' + e.message);
+            }
         };
 
-
-
+        // 启用GA
+        this._insert_tagmanager();
 
         this.adsType = { ADSENSE: 'adsense', IMA: 'ima', GPT: 'gpt' }; // 广告类型
 
@@ -1399,22 +1407,29 @@ class adSdk {
     }
 
     checkAndSendMessages() {
-        if (this.adsdklayer.length > 0) {
+        let self = this;
+        if (self.adsdklayer.length > 0) {
+
+            // self.__sdklog2('[adsdk] 发送消息队列', uniqueMessages.length, '个事件');
             try {
                 if (window.parent && window.parent !== window) {
                     // 去重：相同事件类型只保留最新的
-                    const uniqueMessages = this.deduplicateMessages(this.adsdklayer);
+                    const uniqueMessages = self.deduplicateMessages(self.adsdklayer);
 
                     window.parent.postMessage({
                         type: 'adsdkmessage',
                         data: uniqueMessages
                     }, '*');
-
-                    this.__sdklog2('[adsdk] 发送消息队列', uniqueMessages.length, '个事件');
-
-                    // 清空队列
-                    this.adsdklayer = [];
                 }
+                // android push 
+                if (window.AndroidEventDot && typeof window.AndroidEventDot.events === 'function') {
+                    window.AndroidEventDot.events(JSON.stringify(self.adsdklayer));
+                    self.__sdklog('[adsdk] AndroidEventDot.events called with', JSON.stringify(self.adsdklayer));
+                }
+
+
+                // 清空队列
+                self.adsdklayer = [];
             } catch (error) {
                 console.warn('[adsdk] 发送消息队列失败:', error);
             }
@@ -1511,7 +1526,6 @@ class adSdk {
     }
 
 
-
     // tag init
     _insert_tagmanager() {
         let self = this;
@@ -1577,6 +1591,8 @@ class adSdk {
                     ar2['send'] === 'sdk')
             ) {
                 self.__sdklog3(arguments)
+
+
                 try {
                     if (window.dataLayer && typeof window.dataLayer.push === 'function') {
                         window.dataLayer.push(arguments);
@@ -1598,6 +1614,28 @@ class adSdk {
                         value: self._gameTime += 30
                     });
                 }, 30000);
+            }
+
+            // 添加上报分支
+            if (ar1 === 'game_start') {
+                self.adsdklayer.push({
+                    type: 'GAME_START',
+                    value: ar[2]
+                })
+            }
+
+            if (ar1 === 'level_start') {
+                self.adsdklayer.push({
+                    type: 'LEVEL_START',
+                    value: ar[2]
+                })
+            }
+
+            if (ar1 === 'level_end') {
+                self.adsdklayer.push({
+                    type: 'LEVEL_END',
+                    value: ar[2]
+                })
             }
 
 

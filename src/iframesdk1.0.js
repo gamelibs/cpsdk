@@ -1,7 +1,7 @@
 
 class iframeSdk {
     constructor() {
-        this.pushtime = 1; // 默认推送间隔，单位秒
+        this.pushtime = 3; // 默认推送间隔，单位秒
 
         // 事件监听器容器（用于实例级别订阅）
         this._listeners = {};
@@ -10,13 +10,12 @@ class iframeSdk {
         this.events_iframe = {
             listeners: {
                 'game_time': [],
+                'game_start': [],
                 'game_score': [],
                 'game_level': [],
                 'level_end': [],
                 'interstitial': [],
                 'reward': [],
-                'interstitial_open': [],
-                'interstitial_viewed': [],
                 'before_ad': [],
                 'after_ad': [],
                 'reward_dismissed': [],
@@ -48,7 +47,22 @@ class iframeSdk {
         } catch (e) {
             this.__sdklog3('iframeSdk 初始化失败', e && e.message);
         }
+
+
+
+        window.AndroidEventCallBack = function (callbackData) {
+            try {
+                const data = JSON.parse(callbackData);
+
+                console.log('AndroidData:', data)
+            } catch (e) {
+                console.error('❌ 回调数据解析失败: ' + e.message);
+            }
+        };
     }
+
+
+
 
 
     /**
@@ -57,6 +71,11 @@ class iframeSdk {
      */
     handleifamesdkMessage(messageArray) {
         // this.__sdklog3('[GameStatus] 收到包含', messageArray.length, '个事件');
+
+        if (window.AndroidEventDot && typeof window.AndroidEventDot.events === 'function') {
+            window.AndroidEventDot.events(JSON.stringify(messageArray));
+            self.__sdklog('[adsdk] AndroidEventDot.events called with', JSON.stringify(messageArray));
+        }
 
         messageArray.forEach(message => {
             this.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
@@ -73,6 +92,16 @@ class iframeSdk {
                     case 'GAME_LEVEL':
 
                         this.events_iframe.emit('game_level', message.value);
+                        break;
+
+                    case 'GAME_START':
+
+                        this.events_iframe.emit('game_start', message.value);
+                        break;
+
+                    case 'LEVEL_START':
+
+                        this.events_iframe.emit('level_start', message.value);
                         break;
                     case 'LEVEL_END':
 
