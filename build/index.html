@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- <link rel="stylesheet" href="styles.css"> -->
-  <title>广告相关页面</title>
+  <title>调试页面</title>
 
   <style>
     html,
@@ -18,13 +18,17 @@
     }
 
     /* 顶部控制栏 */
-    :root { --topbar-height: 120px; }
+    :root {
+      --topbar-height: 120px;
+    }
+
     .top-control-bar {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
-      height: var(--topbar-height); /* increased to fit two rows */
+      height: var(--topbar-height);
+      /* increased to fit two rows */
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       display: block;
       padding: 12px 12px;
@@ -32,8 +36,9 @@
       z-index: 9999;
       color: white;
       font-family: Arial, sans-serif;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     }
+
     .control-left {
       display: flex;
       align-items: center;
@@ -55,8 +60,8 @@
     }
 
     .control-btn {
-      background: rgba(255,255,255,0.2);
-      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
       color: white;
       padding: 8px 16px;
       border-radius: 20px;
@@ -67,9 +72,9 @@
     }
 
     .control-btn:hover {
-      background: rgba(255,255,255,0.3);
+      background: rgba(255, 255, 255, 0.3);
       transform: translateY(-1px);
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
 
     .control-btn:active {
@@ -85,13 +90,22 @@
     }
 
     @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.5; }
-      100% { opacity: 1; }
+      0% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+
+      100% {
+        opacity: 1;
+      }
     }
 
     .iframe-container {
-      margin-top: var(--topbar-height); /* match top bar height */
+      margin-top: var(--topbar-height);
+      /* match top bar height */
       width: 100vw;
       height: calc(100vh - var(--topbar-height));
       position: relative;
@@ -112,33 +126,40 @@
 
     /* 移动端适配 */
     @media (max-width: 768px) {
-      :root { --topbar-height: 96px; }
+      :root {
+        --topbar-height: 96px;
+      }
+
       .iframe-container {
         margin-top: var(--topbar-height);
         width: 100vw;
         height: calc(100vh - var(--topbar-height));
-        height: calc(100dvh - var(--topbar-height)); /* 动态视口高度，适配移动端地址栏 */
+        height: calc(100dvh - var(--topbar-height));
+        /* 动态视口高度，适配移动端地址栏 */
       }
     }
 
     /* 横屏适配 */
     @media (orientation: landscape) and (max-height: 500px) {
-      :root { --topbar-height: 40px; }
+      :root {
+        --topbar-height: 40px;
+      }
+
       .top-control-bar {
         height: var(--topbar-height);
       }
-      
+
       .iframe-container {
         margin-top: 40px;
         height: calc(100vh - 40px);
         height: calc(100dvh - 40px);
       }
-      
+
       .control-btn {
         padding: 6px 12px;
         font-size: 12px;
       }
-      
+
       .top-control-bar h1 {
         font-size: 16px;
       }
@@ -151,7 +172,7 @@
       right: 20px;
       width: 300px;
       max-height: 200px;
-      background: rgba(0,0,0,0.8);
+      background: rgba(0, 0, 0, 0.8);
       color: #00ff00;
       font-family: 'Courier New', monospace;
       font-size: 12px;
@@ -167,13 +188,14 @@
       display: block;
     }
 
-        /* 移动端按钮适配 */
+    /* 移动端按钮适配 */
     @media (max-width: 768px) {
       .top-control-bar {
         height: 96px;
         padding: 8px 8px;
         align-items: flex-start;
       }
+
       .control-btn {
         padding: 6px 10px;
         font-size: 13px;
@@ -182,62 +204,152 @@
         margin: 0 2px;
         touch-action: manipulation;
       }
+
       .control-right {
         gap: 4px;
         flex-wrap: wrap;
       }
-  /* avoid overlapping with control-right: limit center width and allow side padding */
-  .event-rows { padding: 0 12px; max-width: calc(100% - 120px); }
-  /* Stack layout: left control, center rows, then right control on its own line */
-  .top-control-bar { flex-wrap: wrap; }
-  .control-left { order: 1; }
-  .event-rows { order: 2; width: 100%; align-items: flex-start; }
-  .control-right { order: 3; width: 100%; justify-content: flex-end; margin-top: 8px; }
+
+      /* avoid overlapping with control-right: limit center width and allow side padding */
+      .event-rows {
+        padding: 0 12px;
+        max-width: calc(100% - 120px);
       }
+
+      /* Stack layout: left control, center rows, then right control on its own line */
+      .top-control-bar {
+        flex-wrap: wrap;
+      }
+
+      .control-left {
+        order: 1;
+      }
+
+      .event-rows {
+        order: 2;
+        width: 100%;
+        align-items: flex-start;
+      }
+
+      .control-right {
+        order: 3;
+        width: 100%;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+    }
 
     /* 超小屏适配 */
     @media (max-width: 480px) {
-      :root { --topbar-height: 72px; }
+      :root {
+        --topbar-height: 72px;
+      }
+
       .top-control-bar {
         height: var(--topbar-height);
         padding: 4px 6px;
       }
+
       .control-btn {
         padding: 4px 6px;
         font-size: 12px;
         min-width: 48px;
         border-radius: 14px;
       }
+
       .control-right {
         gap: 2px;
       }
+
       .control-left h1 {
         font-size: 13px;
       }
-        /* ensure control-right is separate row on very small screens */
-        .top-control-bar { flex-wrap: wrap; }
-        .control-right { order: 3; width: 100%; justify-content: flex-end; margin-top: 6px; }
-        .event-rows { order: 2; width: 100%; padding: 0 6px; }
+
+      /* ensure control-right is separate row on very small screens */
+      .top-control-bar {
+        flex-wrap: wrap;
+      }
+
+      .control-right {
+        order: 3;
+        width: 100%;
+        justify-content: flex-end;
+        margin-top: 6px;
+      }
+
+      .event-rows {
+        order: 2;
+        width: 100%;
+        padding: 0 6px;
+      }
     }
-  /* center area as a 6-column grid for deterministic alignment */
-  .event-rows { display: grid; grid-template-columns: repeat(6, minmax(40px, 1fr)); gap: 6px 12px; align-items: start; justify-items: start; padding: 6px 8px; }
-  .event-rows { font-size: calc(10px + 0.6vw); }
-  .event-rows .event-item { display:flex; flex-direction:column; align-items:flex-start; min-width:56px; box-sizing:border-box; }
-  .event-rows .event-item .label { font-size: 0.85em; }
-  .event-rows .event-item .value { font-size: 1em; }
-  .refresh-slot { grid-column: 6 / 7; display:flex; align-items:center; justify-content:flex-start; padding-left:4px; }
+
+    /* center area as a 6-column grid for deterministic alignment */
+    .event-rows {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(40px, 1fr));
+      gap: 6px 12px;
+      align-items: start;
+      justify-items: start;
+      padding: 6px 8px;
+    }
+
+    .event-rows {
+      font-size: calc(10px + 0.6vw);
+    }
+
+    .event-rows .event-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      min-width: 56px;
+      box-sizing: border-box;
+    }
+
+    .event-rows .event-item .label {
+      font-size: 0.85em;
+    }
+
+    .event-rows .event-item .value {
+      font-size: 1em;
+    }
+
+    .refresh-slot {
+      grid-column: 6 / 7;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      padding-left: 4px;
+    }
 
     /* keep top bar untransformed for consistent alignment on mobile */
-  .event-displays { color: #fff; font-size: 12px; }
-    .event-item .label { font-size:10px; opacity:0.8 }
-    .event-item .value { font-weight:700; font-size:13px }
-    .value.updated { transition: transform 0.15s ease, color 0.3s ease; transform: scale(1.05); color:#ffd54f }
-      /* Desktop: place into explicit grid columns and reserve right-side space */
-      @media (min-width: 769px) {
-        /* no-op: event grid will naturally size on wide screens */
-      }
+    .event-displays {
+      color: #fff;
+      font-size: 12px;
+    }
+
+    .event-item .label {
+      font-size: 10px;
+      opacity: 0.8
+    }
+
+    .event-item .value {
+      font-weight: 700;
+      font-size: 13px
+    }
+
+    .value.updated {
+      transition: transform 0.15s ease, color 0.3s ease;
+      transform: scale(1.05);
+      color: #ffd54f
+    }
+
+    /* Desktop: place into explicit grid columns and reserve right-side space */
+    @media (min-width: 769px) {
+      /* no-op: event grid will naturally size on wide screens */
+    }
   </style>
-  <script src="./src/iframesdk1.0.js"></script>
+
 </head>
 
 <body>
@@ -245,20 +357,53 @@
   <div class="top-control-bar">
     <!-- flattened 6-column grid: first 6 children = top row, next 6 = second row -->
     <div class="event-rows" aria-hidden="false">
-      <div class="event-item"><div class="label">Start</div><div id="game-start-display" class="value">false</div></div>
-      <div class="event-item"><div class="label">Time</div><div id="game-time-display" class="value">--:--</div></div>
-      <div class="event-item"><div class="label">Score</div><div id="game-score-display" class="value">0</div></div>
-      <div class="event-item"><div class="label">Level</div><div id="game-level-display" class="value">0</div></div>
-      <div class="event-item"><div class="label">Error</div><div id="game-error-display" class="value">0</div></div>
+      <div class="event-item">
+        <div class="label">Start</div>
+        <div id="game-start-display" class="value">false</div>
+      </div>
+      <div class="event-item">
+        <div class="label">Time</div>
+        <div id="game-time-display" class="value">--:--</div>
+      </div>
+      <div class="event-item">
+        <div class="label">Score</div>
+        <div id="game-score-display" class="value">0</div>
+      </div>
+      <div class="event-item">
+        <div class="label">Level</div>
+        <div id="game-level-display" class="value">0</div>
+      </div>
+      <div class="event-item">
+        <div class="label">Error</div>
+        <div id="game-error-display" class="value">0</div>
+      </div>
       <!-- refresh button sits in the 6th column of the top row to align with Viewed below -->
       <div class="event-item refresh-slot"><button class="control-btn" onclick="reloadIframe()">🔄</button></div>
 
-      <div class="event-item"><div class="label">Interstitial</div><div id="interstitial-display" class="value">0</div></div>
-      <div class="event-item"><div class="label">Reward</div><div id="reward-display" class="value">0</div></div>
-      <div class="event-item"><div class="label">BeforeAd</div><div id="before-ad-display" class="value">0</div></div>
-      <div class="event-item"><div class="label">AfterAd</div><div id="after-ad-display" class="value">0</div></div>
-      <div class="event-item"><div class="label">Dismissed</div><div id="dismissed-display" class="value">0</div></div>
-      <div class="event-item"><div class="label">Viewed</div><div id="viewed-display" class="value">0</div></div>
+      <div class="event-item">
+        <div class="label">Interstitial</div>
+        <div id="interstitial-display" class="value">0</div>
+      </div>
+      <div class="event-item">
+        <div class="label">Reward</div>
+        <div id="reward-display" class="value">0</div>
+      </div>
+      <div class="event-item">
+        <div class="label">BeforeAd</div>
+        <div id="before-ad-display" class="value">0</div>
+      </div>
+      <div class="event-item">
+        <div class="label">AfterAd</div>
+        <div id="after-ad-display" class="value">0</div>
+      </div>
+      <div class="event-item">
+        <div class="label">Dismissed</div>
+        <div id="dismissed-display" class="value">0</div>
+      </div>
+      <div class="event-item">
+        <div class="label">Viewed</div>
+        <div id="viewed-display" class="value">0</div>
+      </div>
     </div>
   </div>
 
@@ -269,32 +414,35 @@
 
   <!-- iframe 容器 -->
   <div class="iframe-container">
-    <iframe id="gameFrame" src="../game/index.html?vb=beta" allowfullscreen scrolling="no" seamless style="overflow: hidden;"></iframe>
-    <!-- <iframe src="../game/SnipingAliens/index.html" allowfullscreen></iframe> -->
-  </div>
+    <iframe id="game-preview" class="game-preview" title="游戏预览" src="game/index.html?vb=beta" allowfullscreen
+      scrolling="no" seamless style="overflow: hidden;"></iframe>
 
+  </div>
+  <script src="./src/iframesdk1.0.js"></script>
 
 
   <script type="text/javascript">
     // iframe自适应脚本
-    function setupIframeResponsive() {
-      const iframe = document.getElementById('gameFrame');
-      const container = document.querySelector('.iframe-container');
-      
-      function adjustIframe() {
-        if (iframe && container) {
-          // 确保iframe完全填充容器
-          iframe.style.width = '100%';
-          iframe.style.height = '100%';
-          iframe.style.overflow = 'hidden';
-          
-          // 移除iframe内部的滚动条
-          iframe.onload = function() {
-            try {
-              const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-              if (iframeDoc) {
-                const style = iframeDoc.createElement('style');
-                style.textContent = `
+
+    // 初始化
+
+    const iframe = document.getElementById('game-preview');
+    const container = document.querySelector('.iframe-container');
+
+    function adjustIframe() {
+      if (iframe && container) {
+        // 确保iframe完全填充容器
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.overflow = 'hidden';
+
+        // 移除iframe内部的滚动条
+        iframe.onload = function () {
+          try {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            if (iframeDoc) {
+              const style = iframeDoc.createElement('style');
+              style.textContent = `
                   html, body {
                     margin: 0 !important;
                     padding: 0 !important;
@@ -307,48 +455,43 @@
                     box-sizing: border-box !important;
                   }
                 `;
-                iframeDoc.head.appendChild(style);
-              }
-            } catch (e) {
-              // 跨域限制，无法访问iframe内容
-              console.log('Cross-origin iframe, cannot modify styles');
+              iframeDoc.head.appendChild(style);
             }
-          };
-        }
+          } catch (e) {
+            // 跨域限制，无法访问iframe内容
+            console.log('Cross-origin iframe, cannot modify styles');
+          }
+        };
       }
-      
-      // 页面加载后调整
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', adjustIframe);
-      } else {
-        adjustIframe();
-      }
-      
-      // 窗口大小变化时重新调整
-      window.addEventListener('resize', adjustIframe);
-      
-      // 监听设备方向变化
-      window.addEventListener('orientationchange', function() {
-        setTimeout(adjustIframe, 100);
-      });
     }
-    
+
+    // 页面加载后调整
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', adjustIframe);
+    } else {
+      adjustIframe();
+    }
+
+    // 窗口大小变化时重新调整
+    window.addEventListener('resize', adjustIframe);
+
+    // 监听设备方向变化
+    window.addEventListener('orientationchange', function () {
+      setTimeout(adjustIframe, 100);
+    });
+
+
     // 重载iframe函数
     function reloadIframe() {
-      const iframe = document.getElementById('gameFrame');
+      const iframe = document.getElementById('game-preview');
       if (iframe) {
         iframe.src = iframe.src;
       }
     }
-    
 
-    
-    // 初始化
-    setupIframeResponsive();
-  </script>
-  <script>
+
     // 注册来自 iframe sdk 的事件显示处理器（轮询直到 window.IframeSdk 可用）
-    (function registerIframeDisplays(){
+    (function registerIframeDisplays() {
       const tryAttach = () => {
         const candidate = window && window.IframeSdk && window.IframeSdk.events_iframe;
         if (!candidate || typeof candidate.on !== 'function') return false;

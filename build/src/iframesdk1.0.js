@@ -17,9 +17,9 @@ class iframeSdk {
                 'interstitial': [],
                 'reward': [],
                 'before_ad': [],
-                'interstitial_open':[],
+                'interstitial_open': [],
                 'after_ad': [],
-                'interstitial_viewed':[],
+                'interstitial_viewed': [],
                 'reward_dismissed': [],
                 'reward_viewed': [],
                 'ad_error': [],
@@ -42,21 +42,38 @@ class iframeSdk {
             }
         };
 
-        this.setupMessageListener();
         // 初始化完成日志
-        try {
-            this.__sdklog3('iframeSdk 初始化成功');
-        } catch (e) {
-            this.__sdklog3('iframeSdk 初始化失败', e && e.message);
+
+        this.__sdklog3('iframeSdk 初始化成功');
+
+
+        if (window.CpsenseAppEvent && typeof window.CpsenseAppEvent.events === 'function') {
+            window.CpsenseAppEvent.events(JSON.stringify(this.adsdklayer));
+            this.__sdklog('[adsdk] CpsenseAppEvent.events called with', JSON.stringify(this.adsdklayer));
         }
 
 
+        // 监听来自iframe的查询请求
+        window.addEventListener('message', (event) => {
+            try {
+                const data = event.data;
+                if (data && data.type === 'appevent' && data.value === 'is_android') {
+                    this.__sdklog('[IframeSdk] 收到Android广告状态查询请求');
+                    // 检查Android广告状态并响应
+                    setTimeout(() => {
+                        IframeSdk.sendAppAdsOn(true);
+                    }, 100);
+                }
+            } catch (e) {
+                console.warn('[IframeSdk] 处理消息失败:', e);
+            }
+        });
 
-        window.AndroidEventCallBack = function (callbackData) {
+        window.CpsenseAppEventCallBack = function (callbackData) {
             try {
                 const data = JSON.parse(callbackData);
-
-                console.log('AndroidData:', data)
+                console.log('AndroidData:', data);
+                // 原生回调数据处理
             } catch (e) {
                 console.error('❌ 回调数据解析失败: ' + e.message);
             }
@@ -74,9 +91,9 @@ class iframeSdk {
     handleifamesdkMessage(messageArray) {
         // this.__sdklog3('[GameStatus] 收到包含', messageArray.length, '个事件');
 
-        if (window.AndroidEventDot && typeof window.AndroidEventDot.events === 'function') {
-            window.AndroidEventDot.events(JSON.stringify(messageArray));
-            self.__sdklog('[adsdk] AndroidEventDot.events called with', JSON.stringify(messageArray));
+        if (window.CpsenseAppEvent && typeof window.CpsenseAppEvent.events === 'function') {
+            window.CpsenseAppEvent.events(JSON.stringify(messageArray));
+            this.__sdklog('[adsdk] CpsenseAppEvent.events called with', JSON.stringify(messageArray));
         }
 
         messageArray.forEach(message => {
@@ -128,42 +145,91 @@ class iframeSdk {
         });
     }
 
+    /**
+     * 通用的向iframe发送消息的封装方法
+     * @param {Object} message - 要发送的消息对象
+     * @param {string|HTMLElement|Window} target - 目标iframe
+     * @param {string} logPrefix - 日志前缀
+     * @returns {boolean} - 发送是否成功
+     */
+    _postMessageToIframe(message, target, logPrefix = 'message') {
+        let win = null;
+        let targetName = 'game-preview';
+        
+        if (!target) {
+            // 默认查找iframe的逻辑
+            let el = document.getElementById('game-preview');
+            if (!(el && el.tagName === 'IFRAME')) {
+                el = document.getElementById('gameFrame');
+                targetName = 'gameFrame';
+            }
+            if (!(el && el.tagName === 'IFRAME')) {
+                el = document.querySelector('.game-preview');
+                targetName = '.game-preview';
+            }
+            if (!(el && el.tagName === 'IFRAME')) {
+                el = document.querySelector('iframe');
+                targetName = 'first iframe';
+            }
+            if (el && el.tagName === 'IFRAME') {
+                win = el.contentWindow;
+            }
+        } else if (typeof target === 'string') {
+            const el = document.getElementById(target);
+            if (el && el.tagName === 'IFRAME') {
+                win = el.contentWindow;
+                targetName = target;
+            }
+        } else if (target instanceof Window) {
+            win = target;
+            targetName = 'window object';
+        } else if (target && target.tagName === 'IFRAME') {
+            win = target.contentWindow;
+            targetName = target.id || 'iframe element';
+        }
+
+        if (!win) {
+            console.warn(`[IframeSdk] ${logPrefix} send failed: no target iframe found`);
+            return false;
+        }
+
+        try {
+            win.postMessage(message, '*');
+            this.__sdklog(`[IframeSdk] sent ${logPrefix} to ${targetName}:`, JSON.stringify(message));
+            return true;
+        } catch (e) {
+            console.warn(`[IframeSdk] postMessage ${logPrefix} error:`, e);
+            return false;
+        }
+    }
+
 
     /**
      * 向 iframe 中的 SDK 发送 pushtime 更新
      * @param {number} seconds
      */
     setSdkPushTime(seconds, target) {
-        // normalize target
-        let win = null;
-        if (!target) {
-            const el = document.getElementById('game-preview');
-            if (el && el.tagName === 'IFRAME') {
-                win = el.contentWindow;
-            }
-        } else if (typeof target === 'string') {
-            const el = document.getElementById(target);
-            if (el && el.tagName === 'IFRAME') win = el.contentWindow;
-        } else if (target instanceof Window) {
-            win = target;
-        } else if (target && target.tagName === 'IFRAME') {
-            win = target.contentWindow;
-        }
-
-        if (!win) {
-            console.warn('[IframeSdk] send failed: no target iframe found');
-            return false;
-        }
-
-        try {
-            win.postMessage({ type: 'iframecommand', command: 'SET_PUSHTIME', value: Number(seconds) || 1 }, '*');
-            console.log('[IframeSdk] sent SET_PUSHTIME to', target || 'game-preview');
-            return true;
-        } catch (e) {
-            console.warn('[IframeSdk] postMessage error', e);
-            return false;
-        }
+        const message = { type: 'iframecommand', command: 'SET_PUSHTIME', value: Number(seconds) || 1 };
+        return this._postMessageToIframe(message, target, 'SET_PUSHTIME');
     }
+
+    // 向子页发送 APP_ADS_ON 指令（默认目标 iframe 为 #game-preview）
+    sendAppAdsOn(value = true, target) {
+        const message = { type: 'APP_ADS_ON', value: !!value };
+        return this._postMessageToIframe(message, target, 'APP_ADS_ON');
+    }
+
+    /**
+     * 通用的向iframe发送消息方法（对外暴露）
+     * @param {Object} message - 要发送的消息对象
+     * @param {string|HTMLElement|Window} target - 目标iframe
+     * @returns {boolean} - 发送是否成功
+     */
+    sendMessage(message, target) {
+        return this._postMessageToIframe(message, target, 'custom message');
+    }
+
+    
 
 
     __sdklog(...args) {
@@ -228,28 +294,6 @@ class iframeSdk {
             'text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);'
 
         );
-    }
-
-    setupMessageListener() {
-        // 监听来自游戏iframe的postMessage
-        window.addEventListener('message', (event) => {
-            try {
-                const data = event.data;
-                if (!data || typeof data !== 'object') return;
-
-                // 处理新的统一消息格式
-                if (data.type === 'ifamesdkmessage' && Array.isArray(data.data)) {
-                    this.handleifamesdkMessage(data.data);
-                }
-                else if (data.type === 'adsdkmessage' && Array.isArray(data.data)) {
-                    this.handleifamesdkMessage(data.data);
-                }
-            } catch (error) {
-                console.warn('处理游戏状态消息失败:', error);
-            }
-        });
-
-        this.__sdklog3('[GameStatus] 消息监听器已设置');
     }
 
 }

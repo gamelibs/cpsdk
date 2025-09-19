@@ -17,9 +17,9 @@ class iframeSdk {
                 'interstitial': [],
                 'reward': [],
                 'before_ad': [],
-                'interstitial_open':[],
+                'interstitial_open': [],
                 'after_ad': [],
-                'interstitial_viewed':[],
+                'interstitial_viewed': [],
                 'reward_dismissed': [],
                 'reward_viewed': [],
                 'ad_error': [],
@@ -42,21 +42,30 @@ class iframeSdk {
             }
         };
 
-        this.setupMessageListener();
         // 初始化完成日志
-        try {
-            this.__sdklog3('iframeSdk 初始化成功');
-        } catch (e) {
-            this.__sdklog3('iframeSdk 初始化失败', e && e.message);
+
+        this.__sdklog3('iframeSdk 初始化成功');
+
+
+        if (window.CpsenseAppEvent && typeof window.CpsenseAppEvent.events === 'function') {
+            window.CpsenseAppEvent.events(JSON.stringify(this.adsdklayer));
+            this.__sdklog('[adsdk] CpsenseAppEvent.events called with', JSON.stringify(this.adsdklayer));
         }
 
 
-
-        window.AndroidEventCallBack = function (callbackData) {
+        window.CpsenseAppEventCallBack = function (callbackData) {
             try {
                 const data = JSON.parse(callbackData);
 
                 console.log('AndroidData:', data)
+                // 如果原生回调标记 app 广告可用，则通知子页启用 ANDROID 广告
+                if (data && (data.appads_on === true || data.type === 'APP_ADS_ON')) {
+                    try {
+                        IframeSdk.sendAppAdsOn(true);
+                    } catch (e) {
+                        console.warn('[IframeSdk] sendAppAdsOn failed', e);
+                    }
+                }
             } catch (e) {
                 console.error('❌ 回调数据解析失败: ' + e.message);
             }
@@ -74,9 +83,9 @@ class iframeSdk {
     handleifamesdkMessage(messageArray) {
         // this.__sdklog3('[GameStatus] 收到包含', messageArray.length, '个事件');
 
-        if (window.AndroidEventDot && typeof window.AndroidEventDot.events === 'function') {
-            window.AndroidEventDot.events(JSON.stringify(messageArray));
-            self.__sdklog('[adsdk] AndroidEventDot.events called with', JSON.stringify(messageArray));
+        if (window.CpsenseAppEvent && typeof window.CpsenseAppEvent.events === 'function') {
+            window.CpsenseAppEvent.events(JSON.stringify(messageArray));
+            this.__sdklog('[adsdk] CpsenseAppEvent.events called with', JSON.stringify(messageArray));
         }
 
         messageArray.forEach(message => {
@@ -137,7 +146,49 @@ class iframeSdk {
         // normalize target
         let win = null;
         if (!target) {
-            const el = document.getElementById('game-preview');
+            // try common ids and selectors
+            let el = document.getElementById('game-preview') || document.getElementById('gameFrame') || document.querySelector('.game-preview') || document.querySelector('iframe');
+            if (el && el.tagName && el.tagName.toUpperCase() === 'IFRAME') {
+                win = el.contentWindow;
+            }
+        } else if (typeof target === 'string') {
+            // accept either an id or a selector
+            let el = document.getElementById(target) || document.querySelector(target);
+            if (el && el.tagName && el.tagName.toUpperCase() === 'IFRAME') win = el.contentWindow;
+        } else if (target instanceof Window) {
+            win = target;
+        } else if (target && target.tagName && target.tagName.toUpperCase() === 'IFRAME') {
+            win = target.contentWindow;
+        }
+
+        if (!win) {
+            console.warn('[IframeSdk] send failed: no target iframe found');
+            // help debugging: print available iframes
+            try {
+                const all = Array.from(document.getElementsByTagName('iframe')).map(f => ({ id: f.id, class: f.className, src: f.src }));
+                console.warn('[IframeSdk] available iframes:', all);
+            } catch (e) {}
+            return false;
+        }
+
+        try {
+            win.postMessage({ type: 'iframecommand', command: 'SET_PUSHTIME', value: Number(seconds) || 1 }, '*');
+            console.log('[IframeSdk] sent SET_PUSHTIME to', (target || 'game-preview'), 'win=', !!win);
+            return true;
+        } catch (e) {
+            console.warn('[IframeSdk] postMessage error', e);
+            return false;
+        }
+    }
+
+    // 向子页发送 APP_ADS_ON 指令（默认目标 iframe 为 #game-preview）
+    sendAppAdsOn(value = true, target) {
+        let win = null;
+        if (!target) {
+            let el = document.getElementById('game-preview');
+            if (!(el && el.tagName === 'IFRAME')) {
+                el = document.getElementById('gameFrame');
+            }
             if (el && el.tagName === 'IFRAME') {
                 win = el.contentWindow;
             }
@@ -151,19 +202,20 @@ class iframeSdk {
         }
 
         if (!win) {
-            console.warn('[IframeSdk] send failed: no target iframe found');
+            console.warn('[IframeSdk] APP_ADS_ON send failed: no target iframe found');
             return false;
         }
-
         try {
-            win.postMessage({ type: 'iframecommand', command: 'SET_PUSHTIME', value: Number(seconds) || 1 }, '*');
-            console.log('[IframeSdk] sent SET_PUSHTIME to', target || 'game-preview');
+            win.postMessage({ type: 'iframecommand', command: 'APP_ADS_ON', value: !!value }, '*');
+            this.__sdklog('[IframeSdk] sent APP_ADS_ON to', target || 'game-preview');
             return true;
         } catch (e) {
-            console.warn('[IframeSdk] postMessage error', e);
+            console.warn('[IframeSdk] postMessage APP_ADS_ON error', e);
             return false;
         }
     }
+
+    
 
 
     __sdklog(...args) {
@@ -230,28 +282,6 @@ class iframeSdk {
         );
     }
 
-    setupMessageListener() {
-        // 监听来自游戏iframe的postMessage
-        window.addEventListener('message', (event) => {
-            try {
-                const data = event.data;
-                if (!data || typeof data !== 'object') return;
-
-                // 处理新的统一消息格式
-                if (data.type === 'ifamesdkmessage' && Array.isArray(data.data)) {
-                    this.handleifamesdkMessage(data.data);
-                }
-                else if (data.type === 'adsdkmessage' && Array.isArray(data.data)) {
-                    this.handleifamesdkMessage(data.data);
-                }
-            } catch (error) {
-                console.warn('处理游戏状态消息失败:', error);
-            }
-        });
-
-        this.__sdklog3('[GameStatus] 消息监听器已设置');
-    }
-
 }
 
 
@@ -263,4 +293,33 @@ window.setSdkPushTime = IframeSdk.setSdkPushTime.bind(IframeSdk);
 // 对外暴露实例（兼容旧代码）
 window.IframeSdk = IframeSdk;
 
+// 尝试在 DOM 就绪后调用 sendAppAdsOn，如果目标 iframe 尚未插入则重试几次
+;(function callSendAppAdsOnWhenReady() {
+    const maxAttempts = 6;
+    let attempts = 0;
 
+    function trySend() {
+        attempts += 1;
+        try {
+            const ok = IframeSdk.sendAppAdsOn(true);
+            if (ok) {
+                console.log('[IframeSdk] sendAppAdsOn succeeded on attempt', attempts);
+                return true;
+            }
+        } catch (e) {
+            console.warn('[IframeSdk] sendAppAdsOn threw', e);
+        }
+        if (attempts < maxAttempts) {
+            setTimeout(trySend, 250);
+            return false;
+        }
+        console.warn('[IframeSdk] sendAppAdsOn failed after', attempts, 'attempts');
+        return false;
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        trySend();
+    } else {
+        document.addEventListener('DOMContentLoaded', trySend, { once: true });
+    }
+})();
