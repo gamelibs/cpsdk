@@ -2,9 +2,15 @@
 class iframeSdk {
     constructor() {
         this.pushtime = 3; // 默认推送间隔，单位秒
+        // 原生广告探测状态
+        this._androidProbe = { inflight: false, timer: null };
 
         // 事件监听器容器（用于实例级别订阅）
         this._listeners = {};
+
+        // dedupe state for incoming events (avoid double-processing when parent/native both send)
+        this._appeventLastProcessed = new Map();
+        this._appeventDedupWindow = 1000; // ms
 
         // 封闭的事件总线（不暴露到 window），供同域脚本通过实例访问
         this.events_iframe = {
@@ -53,35 +59,80 @@ class iframeSdk {
         }
 
 
-        // 监听来自iframe的查询请求
+        // 监听来自父页面或 iframe 的 postMessage（统一发送 JSON-stringified arrays）
         window.addEventListener('message', (event) => {
             try {
-                const data = event.data;
-                if (data && data.type === 'appevent' && data.value === 'is_android') {
-                    this.__sdklog('[IframeSdk] 收到Android广告状态查询请求');
-                    // 检查Android广告状态并响应
-                    setTimeout(() => {
-                        IframeSdk.sendAppAdsOn(true);
-                    }, 100);
+                const raw = event.data;
+
+                // try parse string payloads (parent may send JSON-stringified arrays)
+                let parsed = raw;
+                if (typeof raw === 'string') {
+                    try { parsed = JSON.parse(raw); } catch (e) { /* leave as raw */ }
+                }
+
+                // If we have an array of events, handle as batch
+                if (Array.isArray(parsed)) {
+                    this._handleIncomingAppEvents(parsed);
+                    return;
+                }
+
+                // If we have a single message object, normalize to single-element array
+                if (parsed && typeof parsed === 'object' && parsed.type) {
+                    // special-case classic probe trigger
+                    if (parsed.type === 'add_ads_event' && parsed.value === 'is_ads_android') {
+                        this.__sdklog('[IframeSdk] 收到Android广告状态查询请求(add_ads_event/is_ads_android)');
+                        if (this._androidProbe.inflight) return;
+                        this._androidProbe.inflight = true;
+                        try {
+                            if (window.CpsenseAppEvent && typeof window.CpsenseAppEvent.events === 'function') {
+                                window.CpsenseAppEvent.events(JSON.stringify([{ type: 'add_ads_event', value: 'is_ads_android' }]));
+                            }
+                        } catch (e) {
+                            console.warn('[IframeSdk] 上报add_ads_event失败:', e && e.message);
+                        }
+                        if (this._androidProbe.timer) { clearTimeout(this._androidProbe.timer); }
+                        this._androidProbe.timer = setTimeout(() => {
+                            this._androidProbe.timer = null;
+                            this._androidProbe.inflight = false;
+                            try { IframeSdk.sendAppAdsOn(false); } catch (_) { }
+                        }, 5000);
+                    }
+
+                    // normalize and handle
+                    this._handleIncomingAppEvents([parsed]);
+                    return;
                 }
             } catch (e) {
                 console.warn('[IframeSdk] 处理消息失败:', e);
             }
         });
 
-        window.CpsenseAppEventCallBack = function (callbackData) {
+        // 原生回调：期待 stringified array or object
+        window.CpsenseAppEventCallBack = (callbackData) => {
             try {
-                const data = JSON.parse(callbackData);
-                console.log('AndroidData:', data);
-                // 原生回调数据处理
+                const parsed = JSON.parse(callbackData);
+                const arr = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
+
+                // probe lifecycle handling (app_ads_on) preserved
+                let hit = null;
+                for (const ev of arr) {
+                    if (ev && ev.type === 'app_ads_on') { hit = ev; break; }
+                }
+                if (hit && typeof hit.value === 'boolean') {
+                    if (this._androidProbe.timer) { clearTimeout(this._androidProbe.timer); this._androidProbe.timer = null; }
+                    this._androidProbe.inflight = false;
+                    try { IframeSdk.sendAppAdsOn(!!hit.value); } catch (_) { }
+                }
+
+                // forward events through unified pipeline
+                if (arr.length) {
+                    this._handleIncomingAppEvents(arr);
+                }
             } catch (e) {
                 console.error('❌ 回调数据解析失败: ' + e.message);
             }
         };
     }
-
-
-
 
 
     /**
@@ -145,6 +196,30 @@ class iframeSdk {
         });
     }
 
+    // dedupe helper: filter quick duplicates and forward to handler
+    _handleIncomingAppEvents(incomingList) {
+        try {
+            if (!Array.isArray(incomingList) || incomingList.length === 0) return;
+            const now = Date.now();
+            const accepted = [];
+            for (const msg of incomingList) {
+                try {
+                    const key = (msg && msg.type ? msg.type : String(msg)) + '|' + JSON.stringify(msg && msg.value !== undefined ? msg.value : null);
+                    const last = this._appeventLastProcessed.get(key) || 0;
+                    if (now - last > this._appeventDedupWindow) {
+                        this._appeventLastProcessed.set(key, now);
+                        accepted.push(msg);
+                    }
+                } catch (e) {
+                    accepted.push(msg);
+                }
+            }
+            if (accepted.length) this.handleifamesdkMessage(accepted);
+        } catch (e) {
+            console.warn('[IframeSdk] _handleIncomingAppEvents error', e);
+        }
+    }
+
     /**
      * 通用的向iframe发送消息的封装方法
      * @param {Object} message - 要发送的消息对象
@@ -155,7 +230,7 @@ class iframeSdk {
     _postMessageToIframe(message, target, logPrefix = 'message') {
         let win = null;
         let targetName = 'game-preview';
-        
+
         if (!target) {
             // 默认查找iframe的逻辑
             let el = document.getElementById('game-preview');
@@ -209,14 +284,16 @@ class iframeSdk {
      * @param {number} seconds
      */
     setSdkPushTime(seconds, target) {
-        const message = { type: 'iframecommand', command: 'SET_PUSHTIME', value: Number(seconds) || 1 };
-        return this._postMessageToIframe(message, target, 'SET_PUSHTIME');
+        // unified format: send array stringified
+        const message = { type: 'SET_PUSHTIME', value: Number(seconds) || 1 };
+        return this._postMessageToIframe(JSON.stringify([message]), target, 'set_pushtime');
     }
 
-    // 向子页发送 APP_ADS_ON 指令（默认目标 iframe 为 #game-preview）
+    // 向子页发送 app_ads_on 指令（默认目标 iframe 为 #game-preview）
     sendAppAdsOn(value = true, target) {
-        const message = { type: 'APP_ADS_ON', value: !!value };
-        return this._postMessageToIframe(message, target, 'APP_ADS_ON');
+        const val = !!value;
+        const message = { type: 'APP_ADS_ON', value: val };
+        return this._postMessageToIframe(JSON.stringify([message]), target, 'app_ads_on');
     }
 
     /**
@@ -226,10 +303,12 @@ class iframeSdk {
      * @returns {boolean} - 发送是否成功
      */
     sendMessage(message, target) {
-        return this._postMessageToIframe(message, target, 'custom message');
+        // normalize to array and send stringified to match unified upstream format
+        const arr = Array.isArray(message) ? message : [message];
+        return this._postMessageToIframe(JSON.stringify(arr), target, 'custom message');
     }
 
-    
+
 
 
     __sdklog(...args) {

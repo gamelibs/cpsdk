@@ -30,11 +30,45 @@ clearBtn.addEventListener('click', () => {
 
 // We rely on wsdk to manage ad SDK initialization. If present, `window.adInstance`
 // should be set by wsdk-v4.4. Subscribe to its event bus to show logs.
-sdkReadyEl.textContent = 'waiting for wsdk';
+sdkReadyEl.textContent = 'waiting...';
 
 function attachAdListeners(ai) {
   if (!ai || !ai._eventAds || typeof ai._eventAds.on !== 'function') return false;
-  ai._eventAds.on('ready', () => { sdkReadyEl.textContent = 'ready'; log('[ad] ready'); });
+  // CPSDK emits ready with (param1, param2) where param2 is often a short code
+  // representing which ad subsystem became ready: 's' (adsense), 'x' (ima/adx), 'gpt' (gpt), or sometimes specific names.
+  ai._eventAds.on('ready', (param1, param2) => {
+    let adType = 'unknown';
+
+    // Prefer the second parameter from CPSDK if present
+    if (param2) {
+      const p = (typeof param2 === 'string') ? param2.toLowerCase() : String(param2);
+      if (p === 's' || p.indexOf('adsense') !== -1) adType = 'adsense';
+      else if (p === 'x' || p.indexOf('ima') !== -1 || p.indexOf('adx') !== -1) adType = 'ima';
+      else if (p === 'gpt' || p.indexOf('gpt') !== -1) adType = 'gpt';
+      else if (p.indexOf('android') !== -1 || p.indexOf('androidads') !== -1 || p.indexOf('android_ads') !== -1) adType = 'android';
+      else adType = param2;
+    } else if (ai && ai.adType) {
+      // Fallback to the CPSDK instance property
+      adType = ai.adType;
+    } else if (window.wsdk && window.wsdk.adType) {
+      // Last resort: wsdk property (may be inaccurate in some setups)
+      adType = window.wsdk.adType;
+    } else if (ai && ai._adType) {
+      adType = ai._adType;
+    }
+
+    // Normalize common CPSDK adType values (adsType mapping)
+    if (typeof adType === 'string') {
+      const norm = adType.toLowerCase();
+      if (norm === 'androidads' || norm === 'android') adType = 'android';
+      else if (norm === 'adsense') adType = 'adsense';
+      else if (norm === 'ima' || norm === 'adx') adType = 'ima';
+      else if (norm === 'gpt') adType = 'gpt';
+    }
+
+    sdkReadyEl.textContent = adType ? `${adType}` : 'unknown';
+    log(`[ad] ready, type: ${adType}`, 'readyParams:', param1, param2);
+  });
   ai._eventAds.on('beforeAd', (t1, t2) => { log('[ad] beforeAd', t1, t2); });
   ai._eventAds.on('afterAd', (t1, t2) => { log('[ad] afterAd', t1, t2); });
   ai._eventAds.on('interstitial', (data) => { log('[ad] interstitial', data); });
@@ -47,12 +81,12 @@ function attachAdListeners(ai) {
 
 // Try immediate attach then poll for a short time
 if (attachAdListeners(window.adInstance)) {
-  sdkReadyEl.textContent = 'attached';
+  // sdkReadyEl will be set by the 'ready' event above
 } else {
   let attempts = 0;
   const poll = setInterval(() => {
     attempts++;
-    if (attachAdListeners(window.adInstance)) { clearInterval(poll); sdkReadyEl.textContent = 'attached'; }
+    if (attachAdListeners(window.adInstance)) { clearInterval(poll); /* sdkReadyEl will be set by 'ready' event */ }
     if (attempts > 30) { clearInterval(poll); log('[ad] no adInstance found'); }
   }, 200);
 }
