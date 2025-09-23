@@ -1,6 +1,7 @@
 /**
  * CPSDK 1.3
  * 添加通知ifame消息机制(20250809)
+ * 增加android广告(20250923)
  */
 
 class adSdk {
@@ -17,6 +18,10 @@ class adSdk {
         this.dev_name = new URLSearchParams(document.location.search).get("dev") || this.config.client || 'default';
         this.gamePlayTimer = null;
 
+        this._eventAdsLast = {};
+        this.ready = new Promise((resolve) => { this._readyResolve = resolve; });
+
+        const _sdk = this;
         this._eventAds = {
             listeners: {
                 'ready': [],
@@ -24,7 +29,7 @@ class adSdk {
                 'afterAd': [],
                 'adDismissed': [],
                 'adViewed': [],
-                'error': [],
+                'ad_error': [],
                 'interstitial': [],
                 'reward': [],
                 'game_score': [],
@@ -33,26 +38,40 @@ class adSdk {
                 'level_end': []
             },
             on(eventName, callback) {
-                if (!this.listeners[eventName]) {
-
-                    return;
-                }
+                if (!this.listeners[eventName]) return;
+                if (typeof callback !== 'function') return;
                 this.listeners[eventName].push(callback);
+
+                // only replay 'ready' to late subscribers (async to avoid reentrancy)
+                try {
+                    if (eventName === 'ready') {
+                        const last = _sdk._eventAdsLast['ready'];
+                        if (last) {
+                            setTimeout(() => {
+                                try { callback(...last); } catch (e) { console.warn('[adsdk] replay callback error', e && e.message); }
+                            }, 0);
+                        }
+                    }
+                } catch (e) { /* ignore replay errors */ }
             },
             emit(eventName, ...args) {
-                if (!this.listeners[eventName]) {
+                // record last args for 'ready' only
+                try { if (eventName === 'ready') _sdk._eventAdsLast['ready'] = args; } catch (e) { /* ignore */ }
 
-                    return;
+                // resolve ready promise once
+                if (eventName === 'ready' && _sdk._readyResolve) {
+                    try { _sdk._readyResolve(...args); } catch (_) { }
+                    _sdk._readyResolve = null;
                 }
+
+                if (!this.listeners[eventName]) return;
                 this.listeners[eventName].forEach(callback => {
-                    callback(...args);
+                    try { callback(...args); } catch (e) { console.warn('[adsdk] event callback error', e && e.message); }
                 });
             },
             off(eventName, callback) {
-                if (!this.listeners[eventName]) {
-
-                    return;
-                }
+                if (!this.listeners[eventName]) return;
+                if (!callback) { this.listeners[eventName] = []; return; }
                 this.listeners[eventName] = this.listeners[eventName].filter(cb => cb !== callback);
             }
         }
@@ -67,7 +86,8 @@ class adSdk {
         this.ima_code = null; // adx广告代码
         this.android_code = null; // android广告代码
 
-        this.adType = null;
+        // cpssdk adType
+        this._adType = null;
         this.adx_type = null; // adx广告类型
         this.gpt_type = null; // gpt广告类型
         this.adsense_type = null; // adsense广告类型
@@ -147,30 +167,90 @@ class adSdk {
         // 监听来自父页面的事件
         // 用于处理Android广告状态查询的回调
         this._appeventCallback = (messageArray) => {
-            // 过滤 callback-only 与规范化 event_type->type
-            const _list = JSON.parse(messageArray)
-            _list.forEach(message => {
-                this.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
+            // 过滤 callback-only 并严格规范化输入为数组形式的消息
+            // 支持入参为 JSON 字符串、单一对象或数组。最终只处理 [{type, value}, ...] 格式
+            let parsed = null;
+            try {
+                if (typeof messageArray === 'string') {
+                    parsed = JSON.parse(messageArray);
+                } else {
+                    parsed = messageArray;
+                }
+            } catch (e) {
+                // 无法解析则直接忽略
+                console.warn('[adsdk] _appeventCallback: 无法解析回调数据', e && e.message);
+                return;
+            }
+
+            // 强制只接收数组
+            if (!Array.isArray(parsed)) {
+                // 如果是单个对象则封装为数组，否则忽略
+                if (parsed && typeof parsed === 'object' && parsed.type) {
+                    parsed = [parsed];
+                } else {
+                    return;
+                }
+            }
+
+            // 规范化每一项为 { type, value }，忽略不合规项
+            const normalized = [];
+            for (const item of parsed) {
+                try {
+                    if (!item || typeof item !== 'object') continue;
+                    const type = item.type || item.event_type || null;
+                    if (!type) continue;
+                    const value = (item.value !== undefined) ? item.value : (item.data !== undefined ? item.data : null);
+                    normalized.push({ type, value });
+                } catch (e) {
+                    // 单条解析错误则跳过该条
+                    continue;
+                }
+            }
+
+            // 记录日志并分发
+            normalized.forEach(message => {
+                let self = this;
+                self.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
                 try {
                     switch (message.type) {
                         case 'app_ads_on':
                             // 处理Android广告开关
                             if (message.value === true) {
-                                this.appads_on = true;
-                                this._openAndroid();
+                                self.appads_on = true;
+                                self._openAndroid();
                             } else {
-                                this.appads_on = false;
+                                self.appads_on = false;
                                 // 若尚未完成任何广告初始化，则回退到网页广告
-                                if (!this._adsInitialized) {
-                                    this._openWebAds();
+                                if (!self._adsInitialized) {
+                                    self._openWebAds();
                                 }
                             }
                             break;
-                        case 'SET_PUSHTIME':
-                            this.updatePushInterval(message.value);
+                        case 'set_pushtime':
+                            self.updatePushInterval(message.value);
+                            break;
+                        case 'beforeAd':
+                            try { if (self.android_callback && typeof self.android_callback.beforeAd === 'function') self.android_callback.beforeAd(); } catch (_) { }
+                            self._eventAds.emit('beforeAd', self.android_type, 'beforeAd');
+                            break;
+                        case 'afterAd':
+                            try { if (self.android_callback && typeof self.android_callback.afterAd === 'function') self.android_callback.afterAd(); } catch (_) { }
+                            self._eventAds.emit('afterAd', self.android_type, 'afterAd');
+                            break;
+                        case 'adViewed':
+                            try { if (self.android_callback && typeof self.android_callback.adViewed === 'function') self.android_callback.adViewed(); } catch (_) { }
+                            self._eventAds.emit('adViewed', self.android_type, 'adViewed');
+                            break;
+                        case 'adDismissed':
+                            try { if (self.android_callback && typeof self.android_callback.adDismissed === 'function') self.android_callback.adDismissed(); } catch (_) { }
+                            self._eventAds.emit('adDismissed', self.android_type, 'adDismissed');
+                            break;
+                        case 'ad_error':
+                            try { if (self.android_callback && typeof self.android_callback.ad_error === 'function') self.android_callback.ad_error(); } catch (_) { }
+                            self._eventAds.emit('ad_error', self.android_type, 'ad_error');
                             break;
                         default:
-                            this._eventAds.emit(message.type, message.value);
+                        // this._eventAds.emit(message.type, message.value);
                     }
                 } catch (error) {
                     console.warn('[GameStatus] 处理消息失败:', message, error);
@@ -178,9 +258,6 @@ class adSdk {
             });
 
             // 上层已确认（父页面或原生回调触达）后再启动消息轮询，避免在未就绪时立即开始定时发送
-
-
-
         };
 
 
@@ -191,11 +268,26 @@ class adSdk {
         // 原生回调处理
         window.CpsenseAppEventCallBack = (event) => {
             if (this.isFramed) { return; }
-            try { this._appeventCallback(event.data) } catch (e) { console.log('message event err', e) }
+            if (this.isAndroid) {
+
+                console.log("event:", event);
+                try { this._appeventCallback(event) } catch (e) { console.log('message event err', e) }
+            }
         };
 
 
         this.adsType = { ADSENSE: 'adsense', IMA: 'ima', GPT: 'gpt', ANDROID: 'androidAds' }; // 广告类型
+
+        Object.defineProperty(this, 'adType', {
+            configurable: true,
+            enumerable: true,
+            get: function () { return this._adType; },
+            set: function (val) {
+                const old = this._adType;
+                if (old === val) return;
+                this._adType = val;
+            }
+        });
 
         // ads事件流程 
         this._eventAds.on('ready', (param1, param2) => {
@@ -452,12 +544,16 @@ class adSdk {
     // 判断广告类型ad_type,根据pubid和dev来获取广告代码
     _initAds() {
         // Android 广告能力探测：向父页/原生发送统一上行事件
-        if(this.isAndroid || this.isFramed){
-
+        if (this.isAndroid || this.isFramed) {
+            setTimeout(() => {
+                if (!this._adsInitialized) {
+                    this._openWebAds();
+                }
+            }, 10000); // 若仍无广告栈初始化则启用网页广告
             this.adsdklayer.push({ type: 'add_ads_event', value: 'is_ads_android' });
-    
+            console.log('发送上层广告能力探测事件');
             this.checkAndSendMessages();
-        }else{
+        } else {
             this._openWebAds();
         }
 
@@ -545,16 +641,11 @@ class adSdk {
                 onReady: () => {
                     isTimeOut = true;
                     this.adSdk_isReady = true;
-                    this._eventAds.emit('ready', "adSdk_isReady:true", "s");
+
                 }
             });
+            this._eventAds.emit('ready', "adSdk_isReady:true", "s");
 
-            this._timeoutTimer_load = setTimeout(() => {
-                clearTimeout(this._timeoutTimer_load);
-                if (!isTimeOut) {
-                    this._eventAds.emit('error', "timeout", "notReady-adsense");
-                }
-            }, 10000);
         }
 
         adsense_Script.onerror = (error) => {
@@ -1235,33 +1326,6 @@ class adSdk {
 
     }
 
-
-    // ANDROID 原生广告触发与实时上报
-    _showAdnroid() {
-        try {
-            // 未开启原生广告
-            if (!this.appads_on) {
-                if (this.android_callback && typeof this.android_callback.error === 'function') {
-                    this.android_callback.error('appads_off');
-                }
-                try { this._eventAds.emit('error', 'error', 'appads_off'); } catch (_) { }
-                return;
-            }
-
-            // 原生桥接调用
-            const bridge = (typeof window !== 'undefined') ? window.AndroidAd : null;
-            if (!bridge || typeof bridge.showAd !== 'function') {
-                try { this._eventAds.emit('error', 'error', 'bridge_unavailable'); } catch (_) { }
-                return;
-            }
-            const kind = (this.gpt_type === 'rewardedAd') ? 'rewarded' : 'interstitial';
-            try { this.req_ad_timeout = false; } catch (_) { }
-            try { bridge.showAd(kind); } catch (e) { try { this._eventAds.emit('error', 'error', 'android_invoke_failed'); } catch (_) { } }
-        } catch (e) {
-            try { this._eventAds.emit('error', 'error', 'android_invoke_failed'); } catch (_) { }
-        }
-    }
-
     _debounceTimer = null;
     _timeoutTimer = null;
 
@@ -1365,16 +1429,16 @@ class adSdk {
         }
         else if (this.adType === this.adsType.ANDROID) {
             // ANDROID：设定类型并改用原生调用，避免重复定时器
-            this.gpt_type = 'interstitialAd';
+            this.android_type = 'interstitialAd';
             if (this._timeoutTimer) { clearTimeout(this._timeoutTimer); }
-            Object.assign(this.gpt_callback, {
+            Object.assign(this.android_callback, {
                 error: (callback && callback.error) || (() => { }),
                 beforeAd: (callback && callback.beforeAd) || (() => { }),
                 afterAd: (callback && callback.afterAd) || (() => { }),
                 adViewed: (callback && callback.adViewed) || (() => { }),
                 adDismissed: (callback && callback.adDismissed) || (() => { })
             });
-            this._showAdnroid();
+            // 通过事件触发调用安卓原生广告
         }
 
 
@@ -1479,16 +1543,16 @@ class adSdk {
             self._showGPT();
         } else if (this.adType === this.adsType.ANDROID) {
             // ANDROID：设定类型并改用原生调用，避免重复定时器
-            this.gpt_type = 'rewardedAd';
+            this.android_type = 'rewardedAd';
             if (this._timeoutTimer_reward) { clearTimeout(this._timeoutTimer_reward); }
-            Object.assign(this.gpt_callback, {
+            Object.assign(this.android_callback, {
                 error: (callback && callback.error) || (() => { }),
                 beforeAd: (callback && callback.beforeAd) || (() => { }),
                 afterAd: (callback && callback.afterAd) || (() => { }),
                 adViewed: (callback && callback.adViewed) || (() => { }),
                 adDismissed: (callback && callback.adDismissed) || (() => { })
             });
-            this._showAdnroid();
+
         }
 
 
@@ -1496,34 +1560,6 @@ class adSdk {
 
     /// postmessage ///
 
-    // 封装一个不使用队列postMessage的方法，直接发送
-    _postMessageDirect(message) {
-        try {
-            // normalize to an array and stringify so parent and native receive the same format
-            const payloadArray = Array.isArray(message) ? message : [message];
-            const payloadString = JSON.stringify(payloadArray);
-
-            // 判断是否被 iframe 嵌入
-            if (this.isFramed) {
-                // send the JSON string so parent receives the same payload shape as native
-                try {
-                    window.parent.postMessage(payloadString, '*');
-                } catch (errPost) {
-                    console.warn('[adsdk] parent.postMessage failed in _postMessageDirect:', errPost);
-                }
-            }
-
-            if (!isFramed && this.isAndroid) {
-                try {
-                    window.CpsenseAppEvent.events(payloadString);
-                } catch (nativeErr) {
-                    console.warn('[adsdk] CpsenseAppEvent.events failed in _postMessageDirect:', nativeErr);
-                }
-            }
-        } catch (e) {
-            console.warn('[adsdk] direct postMessage error:', e);
-        }
-    }
 
     /**
      * 启动消息队列检查
@@ -1556,6 +1592,7 @@ class adSdk {
         }
     }
 
+
     checkAndSendMessages() {
         let self = this;
 
@@ -1580,7 +1617,7 @@ class adSdk {
                 }
             }
 
-            if (self.isAndroid) {
+            if (!self.isFramed && self.isAndroid) {
                 try {
                     window.CpsenseAppEvent.events(JSON.stringify(nativePayload));
                     self.__sdklog('[adsdk] CpsenseAppEvent.events called with', JSON.stringify(nativePayload));

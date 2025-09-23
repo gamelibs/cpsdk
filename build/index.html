@@ -581,10 +581,10 @@
           // ad events
           candidate.on('interstitial', handlers.interstitial);
           candidate.on('reward', handlers.reward);
-          candidate.on('interstitial_open', handlers.beforeAd);
-          candidate.on('before_ad', handlers.beforeAd);
-          candidate.on('interstitial_viewed', handlers.afterAd);
-          candidate.on('after_ad', handlers.afterAd);
+          // candidate.on('interstitial_open', handlers.beforeAd);
+          candidate.on('beforeAd', handlers.beforeAd);
+          // candidate.on('interstitial_viewed', handlers.afterAd);
+          candidate.on('afterAd', handlers.afterAd);
           candidate.on('reward_dismissed', handlers.dismissed);
           candidate.on('reward_viewed', handlers.viewed);
           candidate.on('ad_error', handlers.adError);

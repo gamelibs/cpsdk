@@ -127,7 +127,7 @@ function resolveRelativeToCurrentScript(relPath) {
   try { return new URL(relPath, document.location.href).toString(); } catch (e) { return relPath; }
 }
 
-let plurl = resolveRelativeToCurrentScript('./cpsdk1.3.js');
+let plurl = resolveRelativeToCurrentScript('cpsdk1.3.js');
 loadsdk(plurl).then(() => {
 
   console.log('加载成功', plurl)
