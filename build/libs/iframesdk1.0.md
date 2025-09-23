@@ -10,6 +10,22 @@ window.CpsenseAppEventCallBack
 
 全局接口数据格式,以事件类型进行定义 messageArray = [{type:name,value:111},...] //支持多事件
 
+具体实现如下:
+ listeners: {
+    'ready': [],
+    'beforeAd': [],
+    'afterAd': [],
+    'adDismissed': [],
+    'adViewed': [],
+    'ad_error': [],
+    'interstitial': [],
+    'reward': [],
+    'game_score': [],
+    'game_level': [],
+    'level_start': [],
+    'level_end': []
+},
+
 上行发送数据分为:
 1 直接向android 约定接口:window.CpsenseAppEvent.events(JSON.stringify(messageArray));
 2 通过iframe 使用window.parent.postMessage(JSON.stringify(messageArray), '*');

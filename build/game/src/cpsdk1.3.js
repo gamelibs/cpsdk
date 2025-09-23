@@ -550,7 +550,7 @@ class adSdk {
                     this._openWebAds();
                 }
             }, 10000); // 若仍无广告栈初始化则启用网页广告
-            this.adsdklayer.push({ type: 'add_ads_event', value: 'is_ads_android' });
+            this.adsdklayer.push({ type: 'app_ads_event', value: 'is_ads_native' });
             console.log('发送上层广告能力探测事件');
             this.checkAndSendMessages();
         } else {

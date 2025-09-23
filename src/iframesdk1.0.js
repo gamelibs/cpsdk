@@ -84,7 +84,7 @@ class iframeSdk {
 
                 if (!normalized.length) return;
 
-                this.__sdklog3('[IframeSdk] 收到Android广告状态查询请求(add_ads_event/is_ads_android)');
+                this.__sdklog3('[IframeSdk] 收到Android广告状态查询请求(app_ads_event/is_ads_native)');
 
                 normalized.forEach(message => {
                     this.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
@@ -122,11 +122,11 @@ class iframeSdk {
                                     window.CpsenseAppEvent.events(JSON.stringify([{ type: message.type, value: message.value }]));
                                 }
                                 break;
-                            case 'add_ads_event':
+                            case 'app_ads_event':
                                 if (this.isAndroid) {
                                     window.CpsenseAppEvent.events(JSON.stringify([{ type: message.type, value: message.value }]));
                                 } else {
-                                    console.warn('[IframeSdk] 非安卓环境，忽略 add_ads_event 请求');
+                                    console.warn('[IframeSdk] 非安卓环境，忽略 app_ads_event 请求');
                                     this._postMessageToIframe({ type: 'app_ads_on', value: false });
                                 }
 
@@ -135,7 +135,7 @@ class iframeSdk {
 
                                 this.events_iframe.emit('interstitial', message.value);
                                 if (this.isAndroid) {
-                                   window.CpsenseAppEvent.events(JSON.stringify([{ type: message.type, value: message.value }]));
+                                    window.CpsenseAppEvent.events(JSON.stringify([{ type: message.type, value: message.value }]));
                                 }
                                 break;
                             case 'reward':
@@ -148,7 +148,10 @@ class iframeSdk {
 
                             default:
                                 this.events_iframe.emit(message.type, message.value);
-                                
+                                if (this.isAndroid) {
+                                    window.CpsenseAppEvent.events(JSON.stringify([{ type: message.type, value: message.value }]));
+                                }
+
                         }
                     } catch (error) {
                         console.warn('[GameStatus] 处理消息失败:', message, error);
