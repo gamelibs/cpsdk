@@ -84,10 +84,8 @@ class iframeSdk {
 
                 if (!normalized.length) return;
 
-                this.__sdklog3('[IframeSdk] 收到Android广告状态查询请求(app_ads_event/is_ads_native)');
-
                 normalized.forEach(message => {
-                    this.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
+                    this.__sdklog3('[GameStatus]上行', message.type, '|', message.value);
                     try {
                         switch (message.type) {
                             case 'GAME_TIME':
@@ -154,13 +152,13 @@ class iframeSdk {
 
                         }
                     } catch (error) {
-                        console.warn('[GameStatus] 处理消息失败:', message, error);
+                        console.warn('[GameStatus]上行 处理消息失败:', message, error);
                     }
                 });
 
 
             } catch (e) {
-                console.warn('[IframeSdk] 处理消息失败:', e);
+                console.warn('[IframeSdk]上行 处理消息失败:', e);
             }
         });
 
@@ -208,7 +206,7 @@ class iframeSdk {
 
                 // 记录日志并分发
                 normalized.forEach(message => {
-                    self.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
+                    self.__sdklog3('[GameStatus]下行', message.type, '|', message.value);
                     try {
                         switch (message.type) {
                             case 'app_ads_on':
@@ -233,11 +231,11 @@ class iframeSdk {
                                 this._postMessageToIframe({ type: 'ad_error', value: message.value });
                                 break;
                             default:
-                                this.__sdklog3('[GameStatus] 未知消息类型，忽略:', message.type, message.value);
+                                this.__sdklog3('[GameStatus]下行 未知消息类型，忽略:', message.type, message.value);
 
                         }
                     } catch (error) {
-                        console.warn('[GameStatus] 处理消息失败:', message, error);
+                        console.warn('[GameStatus]下行 处理消息失败:', message, error);
                     }
                 })
             }
@@ -298,7 +296,7 @@ class iframeSdk {
 
         try {
             win.postMessage(message, '*');
-            this.__sdklog3(`[IframeSdk] sent ${logPrefix} to ${targetName}:`, JSON.stringify(message));
+            // this.__sdklog3(`[IframeSdk] sent ${logPrefix} to ${targetName}:`, JSON.stringify(message));
             return true;
         } catch (e) {
             console.warn(`[IframeSdk] postMessage ${logPrefix} error:`, e);

@@ -211,37 +211,50 @@ class adSdk {
             normalized.forEach(message => {
                 let self = this;
                 self.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
+
+
+                if (message.type === 'app_ads_on' && message.value === true) {
+                    self.appads_on = true;
+                    self._openAndroid();
+                }
+
+                if (message.type === "set_pushtime" && typeof message.value === "number") {
+                    self.updatePushInterval(message.value);
+                }
+
+                if (!self.appads_on) return;
+
                 try {
                     switch (message.type) {
-                        case 'app_ads_on':
-                            // 处理Android广告开关
-                            if (message.value === true) {
-                                self.appads_on = true;
-                                self._openAndroid();
+
+                        case 'beforeAd':
+                            self.req_ad_timeout = false;
+                            try { if (self.android_callback && typeof self.android_callback.beforeAd === 'function') self.android_callback.beforeAd(); } catch (_) { }
+                            self._eventAds.emit('beforeAd', message.value, 'beforeAd');
+                            break;
+                        // case 'afterAd':
+                        //     try { if (self.android_callback && typeof self.android_callback.afterAd === 'function') self.android_callback.afterAd(); } catch (_) { }
+                        //     self._eventAds.emit('afterAd', self.android_type, 'afterAd');
+                        //     break;
+                        case 'adViewed':
+                            self.req_ad_timeout = false;
+                            if (message.value === "reward") {
+                                try { if (self.android_callback && typeof self.android_callback.adViewed === 'function') self.android_callback.adViewed(); } catch (_) { }
+                                self._eventAds.emit('adViewed', message.value, 'adViewed');
+                            } else {
+                                try { if (self.android_callback && typeof self.android_callback.afterAd === 'function') self.android_callback.afterAd(); } catch (_) { }
+                                self._eventAds.emit('afterAd', message.value, 'afterAd');
                             }
                             break;
-                        case 'set_pushtime':
-                            self.updatePushInterval(message.value);
-                            break;
-                        case 'beforeAd':
-                            try { if (self.android_callback && typeof self.android_callback.beforeAd === 'function') self.android_callback.beforeAd(); } catch (_) { }
-                            self._eventAds.emit('beforeAd', self.android_type, 'beforeAd');
-                            break;
-                        case 'afterAd':
-                            try { if (self.android_callback && typeof self.android_callback.afterAd === 'function') self.android_callback.afterAd(); } catch (_) { }
-                            self._eventAds.emit('afterAd', self.android_type, 'afterAd');
-                            break;
-                        case 'adViewed':
-                            try { if (self.android_callback && typeof self.android_callback.adViewed === 'function') self.android_callback.adViewed(); } catch (_) { }
-                            self._eventAds.emit('adViewed', self.android_type, 'adViewed');
-                            break;
                         case 'adDismissed':
+                            self.req_ad_timeout = false;
                             try { if (self.android_callback && typeof self.android_callback.adDismissed === 'function') self.android_callback.adDismissed(); } catch (_) { }
-                            self._eventAds.emit('adDismissed', self.android_type, 'adDismissed');
+                            self._eventAds.emit('adDismissed', message.value, 'adDismissed');
                             break;
                         case 'ad_error':
-                            try { if (self.android_callback && typeof self.android_callback.ad_error === 'function') self.android_callback.ad_error(); } catch (_) { }
-                            self._eventAds.emit('ad_error', self.android_type, 'ad_error');
+                            self.req_ad_timeout = false;
+                            try { if (self.android_callback && typeof self.android_callback.error === 'function') self.android_callback.error(); } catch (_) { }
+                            self._eventAds.emit('ad_error', self.android_type, message.value);
                             break;
                         default:
                         // this._eventAds.emit(message.type, message.value);
@@ -263,9 +276,8 @@ class adSdk {
         window.CpsenseAppEventCallBack = (event) => {
             if (this.isFramed) { return; }
             if (this.isAndroid) {
-
-                console.log("event:", event);
                 try { this._appeventCallback(event) } catch (e) { console.log('message event err', e) }
+
             }
         };
 
@@ -312,19 +324,19 @@ class adSdk {
 
         this._eventAds.on('beforeAd', (param1, param2) => {
 
-            if (this.adx_type === "rewardedAd" || this.gpt_type === "rewardedAd" || param1 === "rewardedAd") {
+            if (this.adx_type === "rewardedAd" || this.gpt_type === "rewardedAd" || param1 === "rewardedAd" || this.android_type === "rewardedAd") {
                 window.gtag('event', 'game_reward_open', { send: 'sdk', 'ad_type': this.adType });
-                this.adsdklayer.push({
-                    type: 'reward_open',
-                    value: 1
-                })
+                // this.adsdklayer.push({
+                //     type: 'reward_open',
+                //     value: 1
+                // })
             } else {
 
                 window.gtag('event', 'game_interstitialad_open', { send: 'sdk', 'ad_type': this.adType });
-                this.adsdklayer.push({
-                    type: 'interstitial_open',
-                    value: 1
-                })
+                // this.adsdklayer.push({
+                //     type: 'interstitial_open',
+                //     value: 1
+                // })
             }
             this.__sdklog2("*******adevent**********", param1, param2, this.adType);
         })
@@ -356,7 +368,7 @@ class adSdk {
             })
         })
 
-        this._eventAds.on('error', (param1, param2) => {
+        this._eventAds.on('ad_error', (param1, param2) => {
 
             switch (param2) {
                 case 'timeout':
@@ -641,7 +653,7 @@ class adSdk {
 
         adsense_Script.onerror = (error) => {
 
-            this._eventAds.emit('error', "error", "not-loaded-adsense");
+            this._eventAds.emit('ad_error', "error", "not-loaded-adsense");
             this.__sdklog("adsense loadError:", error);
         }
 
@@ -666,7 +678,7 @@ class adSdk {
         }
 
         adx_script.onerror = () => {
-            this._eventAds.emit('error', "error", "not-loaded-adx");
+            this._eventAds.emit('ad_error', "error", "not-loaded-adx");
             this.__sdklog("adx load error");
         }
     }
@@ -776,7 +788,7 @@ class adSdk {
                             if (event.isEmpty) {
 
                                 self.req_ad_timeout = false; // 重置超时标志
-                                self._eventAds.emit('error', 'error', "No ad returned for rewarded ad slot.");
+                                self._eventAds.emit('ad_error', 'error', "No ad returned for rewarded ad slot.");
                                 if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
                                     self.gpt_callback.error("No ad returned for rewarded ad slot.");
                                 }
@@ -794,7 +806,7 @@ class adSdk {
         }
 
         gpt_script.onerror = () => {
-            this._eventAds.emit('error', "error", "not-loaded-gpt");
+            this._eventAds.emit('ad_error', "error", "not-loaded-gpt");
             this.__sdklog("gpt load error");
         }
     }
@@ -883,7 +895,7 @@ class adSdk {
         } catch (e) {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             self._destroyAdxDom(); // 清理广告容器
-            self._eventAds.emit('error', 'error', 'notReady');
+            self._eventAds.emit('ad_error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
             }
@@ -900,7 +912,7 @@ class adSdk {
         } catch (e) {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             self._destroyAdxDom(); // 清理广告容器
-            self._eventAds.emit('error', 'error', 'notReady');
+            self._eventAds.emit('ad_error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
             }
@@ -1014,7 +1026,7 @@ class adSdk {
                     console.log('adx IMA err:', e);
                 }
 
-                self._eventAds.emit('error', errorType, errorMessage);
+                self._eventAds.emit('ad_error', errorType, errorMessage);
                 if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                     self.adx_callback.error(errorType);
                 }
@@ -1053,7 +1065,7 @@ class adSdk {
             console.log('adx IMA err:', e);
         }
 
-        this._eventAds.emit('error', errorType, errorMessage);
+        this._eventAds.emit('ad_error', errorType, errorMessage);
         if (this.adx_callback && typeof this.adx_callback.error === 'function') {
             this.adx_callback.error(errorType);
         }
@@ -1067,7 +1079,7 @@ class adSdk {
         // 检查Google IMA SDK是否加载成功
         if (typeof google === 'undefined' || typeof google.ima === 'undefined') {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
-            self._eventAds.emit('error', 'error', 'notReady');
+            self._eventAds.emit('ad_error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
             }
@@ -1096,7 +1108,7 @@ class adSdk {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             self._destroyAdxDom(); // 清理广告容器
 
-            self._eventAds.emit('error', 'error', 'notReady');
+            self._eventAds.emit('ad_error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
             }
@@ -1109,7 +1121,7 @@ class adSdk {
                 console.log('ADX ad loading timeout, destroying container');
                 self.req_ad_timeout = false;
                 self._destroyAdxDom(); // 清理广告容器
-                self._eventAds.emit('error', 'error', 'timeout');
+                self._eventAds.emit('ad_error', 'error', 'timeout');
                 if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                     self.adx_callback.error('timeout');
                 }
@@ -1151,7 +1163,7 @@ class adSdk {
                 clearTimeout(self.adxLoadTimeout);
                 self.adxLoadTimeout = null;
             }
-            self._eventAds.emit('error', 'error', 'initError');
+            self._eventAds.emit('ad_error', 'error', 'initError');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('initError');
             }
@@ -1166,7 +1178,7 @@ class adSdk {
         // 检查Google Publisher Tag SDK是否加载成功
         if (typeof window.googletag === 'undefined' || !window.googletag.cmd) {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
-            self._eventAds.emit('error', 'error', 'notReady');
+            self._eventAds.emit('ad_error', 'error', 'notReady');
             if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
                 self.gpt_callback.error('notReady');
             }
@@ -1180,7 +1192,7 @@ class adSdk {
             if (self.req_ad_timeout) {
 
                 self.req_ad_timeout = false;
-                self._eventAds.emit('error', 'error', 'gpt_no_response');
+                self._eventAds.emit('ad_error', 'error', 'gpt_no_response');
                 if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
                     self.gpt_callback.error('gpt_no_response');
                 }
@@ -1197,7 +1209,7 @@ class adSdk {
             if (self.rewardedSlot) {
                 self.rewardedSlot.addService(window.googletag.pubads());
                 window.googletag.display(self.rewardedSlot);
-
+                self.req_ad_timeout = false;
             } else {
 
                 if (self.gptBackupTimeout) {
@@ -1205,7 +1217,7 @@ class adSdk {
                     self.gptBackupTimeout = null;
                 }
                 self.req_ad_timeout = false;
-                self._eventAds.emit('error', 'error', 'create_slot_failed');
+                self._eventAds.emit('ad_error', 'error', 'create_slot_failed');
                 if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
                     self.gpt_callback.error('create_slot_failed');
                 }
@@ -1221,7 +1233,7 @@ class adSdk {
         if (typeof window.adBreak !== 'function') {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error("notReady-adsense");
-            self._eventAds.emit('error', "error", "notReady-adsense");
+            self._eventAds.emit('ad_error', "error", "notReady-adsense");
             return;
         }
         if (self.adsense_type === 'rewardedAd') {
@@ -1249,7 +1261,7 @@ class adSdk {
 
                     self.req_ad_timeout = false;
                     let breakStatus = placement_info && placement_info.breakStatus ? placement_info.breakStatus : 'unknown';
-                    self._eventAds.emit('error', "reward_error", breakStatus);
+                    self._eventAds.emit('ad_error', "reward_error", breakStatus);
                     if (breakStatus !== 'viewed') {
                         if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
                     }
@@ -1271,7 +1283,7 @@ class adSdk {
                         self.req_ad_timeout = false;
                         // console.log('adBreakDone', placement_info);
                         let breakStatus = placement_info && placement_info.breakStatus ? placement_info.breakStatus : 'unknown';
-                        self._eventAds.emit('error', "interstitial_error", breakStatus);
+                        self._eventAds.emit('ad_error', "interstitial_error", breakStatus);
 
                         if (breakStatus !== 'viewed') {
                             if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
@@ -1303,7 +1315,7 @@ class adSdk {
                         self.req_ad_timeout = false;
                         // console.log('adBreakDone', placement_info);
                         let breakStatus = placement_info && placement_info.breakStatus ? placement_info.breakStatus : 'unknown';
-                        self._eventAds.emit('error', "interstitial_error", breakStatus);
+                        self._eventAds.emit('ad_error', "interstitial_error", breakStatus);
 
                         if (breakStatus !== 'viewed') {
                             if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
@@ -1327,7 +1339,7 @@ class adSdk {
         // 检查SDK是否准备就绪,目前adsense不需要检查
         // if (!self.adSdk_isReady) {
         //     if (typeof callback.error === 'function') callback.error("notReady");
-        //     self._eventAds.emit('error', "error", "notReady");
+        //     self._eventAds.emit('ad_error', "error", "notReady");
         //     return;
         // }
 
@@ -1351,7 +1363,7 @@ class adSdk {
             clearTimeout(self._timeoutTimer);
             if (self.req_ad_timeout) {
                 self.is_first = false;
-                self._eventAds.emit('error', "error", "timeout");
+                self._eventAds.emit('ad_error', "error", "timeout");
                 if (typeof callback.error === 'function') callback.error("timeout");
             }
         }, 8000);
@@ -1372,7 +1384,7 @@ class adSdk {
                 self.interstitial_time_start = now;
             } else {
                 if (typeof callback.error === 'function') callback.error({ ad_error_type: 'frequencyinterstitialAd' });
-                self._eventAds.emit('error', "frequencyinterstitialAd", 'frequencyinterstitialAd');
+                self._eventAds.emit('ad_error', "frequencyinterstitialAd", 'frequencyinterstitialAd');
                 return false;
             }
         }
@@ -1418,11 +1430,10 @@ class adSdk {
             });
             self._showGPT();
         }
-        else if (this.adType === this.adsType.ANDROID) {
+        else if (self.adType === self.adsType.ANDROID) {
             // ANDROID：设定类型并改用原生调用，避免重复定时器
-            this.android_type = 'interstitialAd';
-            if (this._timeoutTimer) { clearTimeout(this._timeoutTimer); }
-            Object.assign(this.android_callback, {
+            self.android_type = 'interstitialAd';
+            Object.assign(self.android_callback, {
                 error: (callback && callback.error) || (() => { }),
                 beforeAd: (callback && callback.beforeAd) || (() => { }),
                 afterAd: (callback && callback.afterAd) || (() => { }),
@@ -1444,7 +1455,7 @@ class adSdk {
         // 检查SDK是否准备就绪
         // if (!self.adSdk_isReady) {
         //     if (typeof callback.error === 'function') callback.error("notReady");
-        //     self._eventAds.emit('error', "error", "notReady");
+        //     self._eventAds.emit('ad_error', "error", "notReady");
         //     return;
         // }
 
@@ -1465,7 +1476,7 @@ class adSdk {
         self._timeoutTimer_reward = setTimeout(() => {
             clearTimeout(self._timeoutTimer_reward);
             if (self.req_ad_timeout) {
-                self._eventAds.emit('error', "error", "timeout");
+                self._eventAds.emit('ad_error', "error", "timeout");
                 if (typeof callback.error === 'function') callback.error("timeout");
             }
         }, 8000);
@@ -1486,7 +1497,7 @@ class adSdk {
         // 检查是否超过3次限制
         if (self.reward_requests_count <= 0) {
             if (typeof callback.error === 'function') callback.error({ ad_error_type: 'frequencyrewardAd' });
-            self._eventAds.emit('error', "frequencyrewardAd", 'frequencyrewardAd');
+            self._eventAds.emit('ad_error', "frequencyrewardAd", 'frequencyrewardAd');
             return false;
         }
 
@@ -1535,7 +1546,6 @@ class adSdk {
         } else if (this.adType === this.adsType.ANDROID) {
             // ANDROID：设定类型并改用原生调用，避免重复定时器
             this.android_type = 'rewardedAd';
-            if (this._timeoutTimer_reward) { clearTimeout(this._timeoutTimer_reward); }
             Object.assign(this.android_callback, {
                 error: (callback && callback.error) || (() => { }),
                 beforeAd: (callback && callback.beforeAd) || (() => { }),
@@ -1775,7 +1785,28 @@ class adSdk {
                     ar2['send'] &&
                     ar2['send'] === 'sdk')
             ) {
-                self.__sdklog3(arguments)
+                try {
+
+                    let copyThird;
+                    if (ar[2] && typeof ar[2] === 'object') {
+                        if (Array.isArray(ar[2])) {
+                            copyThird = ar[2].slice();
+                        } else {
+                            copyThird = Object.assign({}, ar[2]);
+                        }
+                    } else {
+                        copyThird = {};
+                    }
+
+                    try { delete copyThird.dev_name; } catch (_) { /* ignore */ }
+                    copyThird.game_id = self.gameid;
+
+                    const logArgs = Array.from(arguments);
+                    logArgs[2] = copyThird;
+
+                    self.__sdklog3(...logArgs);
+
+                } catch (e) { /* ignore */ }
 
 
                 try {
@@ -1919,200 +1950,200 @@ const backup_beta_urls = {
 
 const vast_url = 'https://pubads.g.doubleclick.net/gampad/ads?iu=/22149012983/h5-bwg-vast/400x300-1180marketjs-id00032-bwg&description_url=https%3A%2F%2Fwww.likebox.xyz&tfcd=0&npa=0&sz=400x300&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=';
 const ads_list = {
-           "495-marketjs": "data-ad-client=ca-pub-2252168419307880",
-        "495-behappy": "data-ad-client=ca-pub-2252168419307880",
-        "495-91games": "data-ad-client=ca-pub-2252168419307880",
-        "495-cpsense": "data-ad-client=ca-pub-2252168419307880",
-        "487-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "487-91games": "data-ad-client=ca-pub-5985150674191762",
-        "487-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "487-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "464-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "464-91games": "data-ad-client=ca-pub-5985150674191762",
-        "464-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "464-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "604-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "604-91games": "data-ad-client=ca-pub-5985150674191762",
-        "604-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "604-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "230-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "230-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "230-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "230-91games": "data-ad-client=ca-pub-5985150674191762",
-        "603-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "603-91games": "data-ad-client=ca-pub-5985150674191762",
-        "603-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "603-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "330-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "330-91games": "data-ad-client=ca-pub-5985150674191762",
-        "330-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "330-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "1585-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "1585-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "1585-91games": "data-ad-client=ca-pub-5985150674191762",
-        "1585-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "397-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "397-91games": "data-ad-client=ca-pub-5985150674191762",
-        "397-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "397-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "415-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "415-91games": "data-ad-client=ca-pub-5985150674191762",
-        "415-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "415-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "323-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "323-91games": "data-ad-client=ca-pub-5985150674191762",
-        "323-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "323-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "1696-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "1696-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "1696-91games": "data-ad-client=ca-pub-5985150674191762",
-        "1696-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "831-behappy": "data-ad-client=ca-pub-9717542802261829",
-        "831-91games": "data-ad-client=ca-pub-9717542802261829",
-        "831-marketjs": "data-ad-client=ca-pub-9717542802261829",
-        "831-cpsense": "data-ad-client=ca-pub-9717542802261829",
-        "1349-marketjs": "data-ad-client=ca-pub-9717542802261829",
-        "1349-behappy": "data-ad-client=ca-pub-9717542802261829",
-        "1349-91games": "data-ad-client=ca-pub-9717542802261829",
-        "1349-cpsense": "data-ad-client=ca-pub-9717542802261829",
-        "827-behappy": "data-ad-client=ca-pub-9717542802261829",
-        "827-91games": "data-ad-client=ca-pub-9717542802261829",
-        "827-marketjs": "data-ad-client=ca-pub-9717542802261829",
-        "827-cpsense": "data-ad-client=ca-pub-9717542802261829",
-        "741-behappy": "data-ad-client=ca-pub-9717542802261829",
-        "741-91games": "data-ad-client=ca-pub-9717542802261829",
-        "741-marketjs": "data-ad-client=ca-pub-9717542802261829",
-        "741-cpsense": "data-ad-client=ca-pub-9717542802261829",
-        "788-behappy": "data-ad-client=ca-pub-9717542802261829",
-        "788-91games": "data-ad-client=ca-pub-9717542802261829",
-        "788-marketjs": "data-ad-client=ca-pub-9717542802261829",
-        "788-cpsense": "data-ad-client=ca-pub-9717542802261829",
-        "843-behappy": "data-ad-client=ca-pub-9717542802261829",
-        "843-91games": "data-ad-client=ca-pub-9717542802261829",
-        "843-marketjs": "data-ad-client=ca-pub-9717542802261829",
-        "843-cpsense": "data-ad-client=ca-pub-9717542802261829",
-        "786-behappy": "data-ad-client=ca-pub-9717542802261829",
-        "786-91games": "data-ad-client=ca-pub-9717542802261829",
-        "786-marketjs": "data-ad-client=ca-pub-9717542802261829",
-        "786-cpsense": "data-ad-client=ca-pub-9717542802261829",
-        "458-behappy": "data-ad-client=ca-pub-9717542802261829",
-        "458-91games": "data-ad-client=ca-pub-9717542802261829",
-        "458-marketjs": "data-ad-client=ca-pub-9717542802261829",
-        "458-cpsense": "data-ad-client=ca-pub-9717542802261829",
-        "371-behappy": "data-ad-client=ca-pub-9717542802261829",
-        "371-91games": "data-ad-client=ca-pub-9717542802261829",
-        "371-cpsense": "data-ad-client=ca-pub-9717542802261829",
-        "371-marketjs": "data-ad-client=ca-pub-9717542802261829",
-        "3936-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "3936-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "3936-91games": "data-ad-client=ca-pub-5985150674191762",
-        "3936-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "3936-cpsense-cd": "data-ad-client=ca-pub-5985150674191762",
-        "3937-marketjs": "data-ad-client=ca-pub-9973079271836529",
-        "3937-behappy": "data-ad-client=ca-pub-9973079271836529",
-        "3937-91games": "data-ad-client=ca-pub-9973079271836529",
-        "3937-cpsense": "data-ad-client=ca-pub-9973079271836529",
-        "3937-cpsense-cd": "data-ad-client=ca-pub-9973079271836529",
-        "3938-marketjs": "data-ad-client=ca-pub-9973079271836529",
-        "3938-behappy": "data-ad-client=ca-pub-9973079271836529",
-        "3938-91games": "data-ad-client=ca-pub-9973079271836529",
-        "3938-cpsense": "data-ad-client=ca-pub-9973079271836529",
-        "3938-cpsense-cd": "data-ad-client=ca-pub-9973079271836529",
-        "1323-marketjs": "data-ad-client=ca-pub-5985150674191762",
-        "1323-behappy": "data-ad-client=ca-pub-5985150674191762",
-        "1323-91games": "data-ad-client=ca-pub-5985150674191762",
-        "1323-cpsense": "data-ad-client=ca-pub-5985150674191762",
-        "1323-cpsense-cd": "data-ad-client=ca-pub-5985150674191762",
-        "3942-marketjs": "data-ad-client=ca-pub-4230754353315567",
-        "3942-behappy": "data-ad-client=ca-pub-4230754353315567",
-        "3942-91games": "data-ad-client=ca-pub-4230754353315567",
-        "3942-cpsense": "data-ad-client=ca-pub-4230754353315567",
-        "3942-cpsense-cd": "data-ad-client=ca-pub-4230754353315567",
-        "3553-marketjs": "data-ad-client=ca-pub-8934204454340791",
-        "3553-behappy": "data-ad-client=ca-pub-8934204454340791",
-        "3553-91games": "data-ad-client=ca-pub-8934204454340791",
-        "3553-cpsense": "data-ad-client=ca-pub-8934204454340791",
-        "3553-cpsense-cd": "data-ad-client=ca-pub-8934204454340791",
-        "3884-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-        "3884-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-        "3884-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-        "4073-marketjs": "/68700844/nor0308/Incentive-01-nor0308",
-        "4073-behappy": "/68700844/nor0308/Incentive-01-nor0308",
-        "4073-91games": "/68700844/nor0308/Incentive-01-nor0308",
-        "4073-cpsense": "/68700844/nor0308/Incentive-01-nor0308",
-        "4073-cpsense-cd": "/68700844/nor0308/Incentive-01-nor0308",
-        "3887-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-        "3887-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-        "3887-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-        "3890-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-        "3890-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-        "3890-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-        "3882-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-www.6xfun.com/www.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-        "3882-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-www.6xfun.com/www.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-        "3882-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-www.6xfun.com/www.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-        "3885-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hot.6xfun.com/hot.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-        "3885-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hot.6xfun.com/hot.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-        "3885-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hot.6xfun.com/hot.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-        "4107-marketjs": "/68700844/nor3333/Incentive-01-nor3333",
-        "4107-behappy": "/68700844/nor3333/Incentive-01-nor3333",
-        "4107-91games": "/68700844/nor3333/Incentive-01-nor3333",
-        "4107-cpsense": "/68700844/nor3333/Incentive-01-nor3333",
-        "4107-cpsense-cd": "/68700844/nor3333/Incentive-01-nor3333",
-        "4006-marketjs": "data-ad-client=ca-pub-6201795131710027",
-        "4006-behappy": "data-ad-client=ca-pub-6201795131710027",
-        "4006-91games": "data-ad-client=ca-pub-6201795131710027",
-        "4006-cpsense": "data-ad-client=ca-pub-6201795131710027",
-        "4006-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-        "4049-marketjs": "data-ad-client=ca-pub-6201795131710027",
-        "4049-behappy": "data-ad-client=ca-pub-6201795131710027",
-        "4049-91games": "data-ad-client=ca-pub-6201795131710027",
-        "4049-cpsense": "data-ad-client=ca-pub-6201795131710027",
-        "4049-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-        "4007-marketjs": "data-ad-client=ca-pub-6201795131710027",
-        "4007-behappy": "data-ad-client=ca-pub-6201795131710027",
-        "4007-91games": "data-ad-client=ca-pub-6201795131710027",
-        "4007-cpsense": "data-ad-client=ca-pub-6201795131710027",
-        "4007-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-        "4008-marketjs": "data-ad-client=ca-pub-6201795131710027",
-        "4008-behappy": "data-ad-client=ca-pub-6201795131710027",
-        "4008-91games": "data-ad-client=ca-pub-6201795131710027",
-        "4008-cpsense": "data-ad-client=ca-pub-6201795131710027",
-        "4008-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-        "4094-marketjs": "data-ad-client=ca-pub-6201795131710027",
-        "4094-behappy": "data-ad-client=ca-pub-6201795131710027",
-        "4094-91games": "data-ad-client=ca-pub-6201795131710027",
-        "4094-cpsense": "data-ad-client=ca-pub-6201795131710027",
-        "4094-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-        "4109-marketjs": "/23260759350/fine350/01-reward-fine350",
-        "4109-behappy": "/23260759350/fine350/01-reward-fine350",
-        "4109-91games": "/23260759350/fine350/01-reward-fine350",
-        "4109-cpsense": "/23260759350/fine350/01-reward-fine350",
-        "4109-cpsense-cd": "/23260759350/fine350/01-reward-fine350",
-        "311-marketjs": "data-ad-client=ca-pub-9261379780030863",
-        "311-behappy": "data-ad-client=ca-pub-9261379780030863",
-        "311-91games": "data-ad-client=ca-pub-9261379780030863",
-        "311-cpsense": "data-ad-client=ca-pub-9261379780030863",
-        "311-cpsense-cd": "data-ad-client=ca-pub-9261379780030863",
-        "3917-marketjs": "data-ad-client=ca-pub-4134851517660003",
-        "221-91games": "/23260026613/h5-game/h5-game-rewarded-91games",
-        "221-cpsense": "/23260026613/h5-game/h5-game-rewarded-cpsense",
-        "221-cpsense-cd": "/23260026613/h5-game/h5-game-rewarded-cpsense-cd",
-        "4300-91games": "data-ad-client=ca-pub-3126784834320338",
-        "4300-cpsense": "data-ad-client=ca-pub-3126784834320338",
-        "4300-cpsense-cd": "data-ad-client=ca-pub-3126784834320338",
-        "4300-behappy": "data-ad-client=ca-pub-3126784834320338",
-        "4348-behappy": "data-ad-client=ca-pub-3126784834320338",
-        "4348-91games": "data-ad-client=ca-pub-3126784834320338",
-        "4348-cpsense": "data-ad-client=ca-pub-3126784834320338",
-        "4348-cpsense-cd": "data-ad-client=ca-pub-3126784834320338",
-        "4319-behappy": "data-ad-client=ca-pub-3126784834320338",
-        "4319-91games": "data-ad-client=ca-pub-3126784834320338",
-        "4319-cpsense": "data-ad-client=ca-pub-3126784834320338",
-        "4319-cpsense-cd": "data-ad-client=ca-pub-3126784834320338",
-        "marketjs": "/23260026613/h5-game/h5-game-rewarded",
-        "behappy": "/23260026613/h5-game/h5-game-rewarded",
-        "91games": "/23260026613/h5-game/h5-game-rewarded-91games",
-        "cpsense": "/23260026613/h5-game/h5-game-rewarded-cpsense",
-        "cpsense-cd": "/23260026613/h5-game/h5-game-rewarded-cpsense-cd",
-        "default_ads": "/23260026613/h5-game/h5-game-rewarded"
+    "495-marketjs": "data-ad-client=ca-pub-2252168419307880",
+    "495-behappy": "data-ad-client=ca-pub-2252168419307880",
+    "495-91games": "data-ad-client=ca-pub-2252168419307880",
+    "495-cpsense": "data-ad-client=ca-pub-2252168419307880",
+    "487-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "487-91games": "data-ad-client=ca-pub-5985150674191762",
+    "487-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "487-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "464-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "464-91games": "data-ad-client=ca-pub-5985150674191762",
+    "464-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "464-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "604-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "604-91games": "data-ad-client=ca-pub-5985150674191762",
+    "604-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "604-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "230-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "230-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "230-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "230-91games": "data-ad-client=ca-pub-5985150674191762",
+    "603-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "603-91games": "data-ad-client=ca-pub-5985150674191762",
+    "603-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "603-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "330-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "330-91games": "data-ad-client=ca-pub-5985150674191762",
+    "330-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "330-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "1585-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "1585-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "1585-91games": "data-ad-client=ca-pub-5985150674191762",
+    "1585-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "397-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "397-91games": "data-ad-client=ca-pub-5985150674191762",
+    "397-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "397-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "415-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "415-91games": "data-ad-client=ca-pub-5985150674191762",
+    "415-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "415-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "323-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "323-91games": "data-ad-client=ca-pub-5985150674191762",
+    "323-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "323-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "1696-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "1696-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "1696-91games": "data-ad-client=ca-pub-5985150674191762",
+    "1696-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "831-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "831-91games": "data-ad-client=ca-pub-9717542802261829",
+    "831-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "831-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "1349-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "1349-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "1349-91games": "data-ad-client=ca-pub-9717542802261829",
+    "1349-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "827-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "827-91games": "data-ad-client=ca-pub-9717542802261829",
+    "827-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "827-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "741-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "741-91games": "data-ad-client=ca-pub-9717542802261829",
+    "741-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "741-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "788-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "788-91games": "data-ad-client=ca-pub-9717542802261829",
+    "788-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "788-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "843-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "843-91games": "data-ad-client=ca-pub-9717542802261829",
+    "843-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "843-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "786-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "786-91games": "data-ad-client=ca-pub-9717542802261829",
+    "786-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "786-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "458-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "458-91games": "data-ad-client=ca-pub-9717542802261829",
+    "458-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "458-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "371-behappy": "data-ad-client=ca-pub-9717542802261829",
+    "371-91games": "data-ad-client=ca-pub-9717542802261829",
+    "371-cpsense": "data-ad-client=ca-pub-9717542802261829",
+    "371-marketjs": "data-ad-client=ca-pub-9717542802261829",
+    "3936-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "3936-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "3936-91games": "data-ad-client=ca-pub-5985150674191762",
+    "3936-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "3936-cpsense-cd": "data-ad-client=ca-pub-5985150674191762",
+    "3937-marketjs": "data-ad-client=ca-pub-9973079271836529",
+    "3937-behappy": "data-ad-client=ca-pub-9973079271836529",
+    "3937-91games": "data-ad-client=ca-pub-9973079271836529",
+    "3937-cpsense": "data-ad-client=ca-pub-9973079271836529",
+    "3937-cpsense-cd": "data-ad-client=ca-pub-9973079271836529",
+    "3938-marketjs": "data-ad-client=ca-pub-9973079271836529",
+    "3938-behappy": "data-ad-client=ca-pub-9973079271836529",
+    "3938-91games": "data-ad-client=ca-pub-9973079271836529",
+    "3938-cpsense": "data-ad-client=ca-pub-9973079271836529",
+    "3938-cpsense-cd": "data-ad-client=ca-pub-9973079271836529",
+    "1323-marketjs": "data-ad-client=ca-pub-5985150674191762",
+    "1323-behappy": "data-ad-client=ca-pub-5985150674191762",
+    "1323-91games": "data-ad-client=ca-pub-5985150674191762",
+    "1323-cpsense": "data-ad-client=ca-pub-5985150674191762",
+    "1323-cpsense-cd": "data-ad-client=ca-pub-5985150674191762",
+    "3942-marketjs": "data-ad-client=ca-pub-4230754353315567",
+    "3942-behappy": "data-ad-client=ca-pub-4230754353315567",
+    "3942-91games": "data-ad-client=ca-pub-4230754353315567",
+    "3942-cpsense": "data-ad-client=ca-pub-4230754353315567",
+    "3942-cpsense-cd": "data-ad-client=ca-pub-4230754353315567",
+    "3553-marketjs": "data-ad-client=ca-pub-8934204454340791",
+    "3553-behappy": "data-ad-client=ca-pub-8934204454340791",
+    "3553-91games": "data-ad-client=ca-pub-8934204454340791",
+    "3553-cpsense": "data-ad-client=ca-pub-8934204454340791",
+    "3553-cpsense-cd": "data-ad-client=ca-pub-8934204454340791",
+    "3884-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3884-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3884-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "4073-marketjs": "/68700844/nor0308/Incentive-01-nor0308",
+    "4073-behappy": "/68700844/nor0308/Incentive-01-nor0308",
+    "4073-91games": "/68700844/nor0308/Incentive-01-nor0308",
+    "4073-cpsense": "/68700844/nor0308/Incentive-01-nor0308",
+    "4073-cpsense-cd": "/68700844/nor0308/Incentive-01-nor0308",
+    "3887-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3887-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3887-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3882-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-www.6xfun.com/www.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
+    "3882-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-www.6xfun.com/www.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
+    "3882-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-www.6xfun.com/www.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
+    "3885-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hot.6xfun.com/hot.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
+    "3885-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hot.6xfun.com/hot.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
+    "3885-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hot.6xfun.com/hot.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
+    "4107-marketjs": "/68700844/nor3333/Incentive-01-nor3333",
+    "4107-behappy": "/68700844/nor3333/Incentive-01-nor3333",
+    "4107-91games": "/68700844/nor3333/Incentive-01-nor3333",
+    "4107-cpsense": "/68700844/nor3333/Incentive-01-nor3333",
+    "4107-cpsense-cd": "/68700844/nor3333/Incentive-01-nor3333",
+    "4006-marketjs": "data-ad-client=ca-pub-6201795131710027",
+    "4006-behappy": "data-ad-client=ca-pub-6201795131710027",
+    "4006-91games": "data-ad-client=ca-pub-6201795131710027",
+    "4006-cpsense": "data-ad-client=ca-pub-6201795131710027",
+    "4006-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
+    "4049-marketjs": "data-ad-client=ca-pub-6201795131710027",
+    "4049-behappy": "data-ad-client=ca-pub-6201795131710027",
+    "4049-91games": "data-ad-client=ca-pub-6201795131710027",
+    "4049-cpsense": "data-ad-client=ca-pub-6201795131710027",
+    "4049-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
+    "4007-marketjs": "data-ad-client=ca-pub-6201795131710027",
+    "4007-behappy": "data-ad-client=ca-pub-6201795131710027",
+    "4007-91games": "data-ad-client=ca-pub-6201795131710027",
+    "4007-cpsense": "data-ad-client=ca-pub-6201795131710027",
+    "4007-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
+    "4008-marketjs": "data-ad-client=ca-pub-6201795131710027",
+    "4008-behappy": "data-ad-client=ca-pub-6201795131710027",
+    "4008-91games": "data-ad-client=ca-pub-6201795131710027",
+    "4008-cpsense": "data-ad-client=ca-pub-6201795131710027",
+    "4008-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
+    "4094-marketjs": "data-ad-client=ca-pub-6201795131710027",
+    "4094-behappy": "data-ad-client=ca-pub-6201795131710027",
+    "4094-91games": "data-ad-client=ca-pub-6201795131710027",
+    "4094-cpsense": "data-ad-client=ca-pub-6201795131710027",
+    "4094-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
+    "4109-marketjs": "/23260759350/fine350/01-reward-fine350",
+    "4109-behappy": "/23260759350/fine350/01-reward-fine350",
+    "4109-91games": "/23260759350/fine350/01-reward-fine350",
+    "4109-cpsense": "/23260759350/fine350/01-reward-fine350",
+    "4109-cpsense-cd": "/23260759350/fine350/01-reward-fine350",
+    "311-marketjs": "data-ad-client=ca-pub-9261379780030863",
+    "311-behappy": "data-ad-client=ca-pub-9261379780030863",
+    "311-91games": "data-ad-client=ca-pub-9261379780030863",
+    "311-cpsense": "data-ad-client=ca-pub-9261379780030863",
+    "311-cpsense-cd": "data-ad-client=ca-pub-9261379780030863",
+    "3917-marketjs": "data-ad-client=ca-pub-4134851517660003",
+    "221-91games": "/23260026613/h5-game/h5-game-rewarded-91games",
+    "221-cpsense": "/23260026613/h5-game/h5-game-rewarded-cpsense",
+    "221-cpsense-cd": "/23260026613/h5-game/h5-game-rewarded-cpsense-cd",
+    "4300-91games": "data-ad-client=ca-pub-3126784834320338",
+    "4300-cpsense": "data-ad-client=ca-pub-3126784834320338",
+    "4300-cpsense-cd": "data-ad-client=ca-pub-3126784834320338",
+    "4300-behappy": "data-ad-client=ca-pub-3126784834320338",
+    "4348-behappy": "data-ad-client=ca-pub-3126784834320338",
+    "4348-91games": "data-ad-client=ca-pub-3126784834320338",
+    "4348-cpsense": "data-ad-client=ca-pub-3126784834320338",
+    "4348-cpsense-cd": "data-ad-client=ca-pub-3126784834320338",
+    "4319-behappy": "data-ad-client=ca-pub-3126784834320338",
+    "4319-91games": "data-ad-client=ca-pub-3126784834320338",
+    "4319-cpsense": "data-ad-client=ca-pub-3126784834320338",
+    "4319-cpsense-cd": "data-ad-client=ca-pub-3126784834320338",
+    "marketjs": "/23260026613/h5-game/h5-game-rewarded",
+    "behappy": "/23260026613/h5-game/h5-game-rewarded",
+    "91games": "/23260026613/h5-game/h5-game-rewarded-91games",
+    "cpsense": "/23260026613/h5-game/h5-game-rewarded-cpsense",
+    "cpsense-cd": "/23260026613/h5-game/h5-game-rewarded-cpsense-cd",
+    "default_ads": "/23260026613/h5-game/h5-game-rewarded"
 };
