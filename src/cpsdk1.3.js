@@ -2,6 +2,7 @@
  * CPSDK 1.3
  * 添加通知ifame消息机制(20250809)
  * 增加android广告(20250923)
+ * 增加广告验证判断逻辑(20251011)
  */
 
 class adSdk {
@@ -210,18 +211,46 @@ class adSdk {
             // 记录日志并分发
             normalized.forEach(message => {
                 let self = this;
-                self.__sdklog3('[GameStatus] 收到', message.type, '|', message.value);
+                self.__sdklog3('[GameStatus] 收到', message.type);
 
 
-                if (message.type === 'app_ads_on' && message.value === true) {
-                    self.appads_on = true;
-                    self._openAndroid();
-                }
+                if (message.type === 'app_ads_on' && message["value"] && message["value"]["app_name"]) {
+                    
+                    self._ajax("https://www.cpsense.com/public/item/sdk?id=" + self.pubid, "GET", "").then(A => {
+       
+                        if (A && A.code === 1 && Array.isArray(A.data)) {
+                            const appName = message["app_name"];
+                            if (typeof appName === 'string' && appName.length > 0) {
+                                // 遍历 data 中的每一项，检查 sdkId 是否包含 app_name
+                                const match = A.data.some(item => {
+                                    try {
+                                        return item && typeof item.sdkId === 'string' && item.sdkId.indexOf(appName) !== -1;
+                                    } catch (e) {
+                                        return false;
+                                    }
+                                });
+                                if (match) {
+                                    self.appads_on = true;
+                                    self._openAndroid();
+                                } else {
+                                    console.error('[adsdk] app_ads_on: 未在返回的 sdkId 列表中找到', appName);
+                                }
+                            } else {
+                                console.error('[adsdk] app_ads_on 缺少或非法的 app_name 字段，忽略');
+                            }
+                        } else {
+                            console.error('[adsdk] app_ads_on 返回数据异常，忽略');
+                        }
+                    }).catch(error => {
+                        console.error("Error fetching API:", error);
+                    });
+                } 
 
                 if (message.type === "set_pushtime" && typeof message.value === "number") {
                     self.updatePushInterval(message.value);
                 }
 
+                // 如果android广告功能未开启则不处理后续广告消息
                 if (!self.appads_on) return;
 
                 try {
@@ -1742,7 +1771,8 @@ class adSdk {
             window.gtag('set', 'cookie_flags', 'SameSite=None;Secure');
             window.gtag('config', 'G-NL2943ZRFH', {
                 game_id: self.gameid,
-                'dev_name': self.dev_name//self.config.client
+                dev_name: self.dev_name,//self.config.client
+                iframe_url: document.referrer
             });
         };
 
@@ -1799,6 +1829,7 @@ class adSdk {
                     }
 
                     try { delete copyThird.dev_name; } catch (_) { /* ignore */ }
+                    try { delete copyThird.iframe_url; } catch (_) { /* ignore */ }
                     copyThird.game_id = self.gameid;
 
                     const logArgs = Array.from(arguments);

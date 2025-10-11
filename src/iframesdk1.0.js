@@ -124,8 +124,8 @@ class iframeSdk {
                                 if (this.isAndroid) {
                                     window.CpsenseAppEvent.events(JSON.stringify([{ type: message.type, value: message.value }]));
                                 } else {
-                                    console.warn('[IframeSdk] 非安卓环境，忽略 app_ads_event 请求');
-                                    this._postMessageToIframe({ type: 'app_ads_on', value: false });
+                                    // console.warn('[IframeSdk] 非安卓环境，忽略 app_ads_event 请求');//使用接口判断不需要此逻辑了
+                                    // this._postMessageToIframe({ type: 'app_ads_on', value: false });
                                 }
 
                                 break;
