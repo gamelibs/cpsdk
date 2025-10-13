@@ -214,12 +214,12 @@ class adSdk {
                 self.__sdklog3('[GameStatus] 收到', message.type);
 
 
-                if (message.type === 'app_ads_on' && message["value"] && message["value"]["app_name"]) {
+                if (message.type === 'app_ads_on' && message["value"]) {
                     
                     self._ajax("https://www.cpsense.com/public/item/sdk?id=" + self.pubid, "GET", "").then(A => {
        
                         if (A && A.code === 1 && Array.isArray(A.data)) {
-                            const appName = message["app_name"];
+                            const appName = message["value"]["app_name"];
                             if (typeof appName === 'string' && appName.length > 0) {
                                 // 遍历 data 中的每一项，检查 sdkId 是否包含 app_name
                                 const match = A.data.some(item => {
@@ -234,15 +234,19 @@ class adSdk {
                                     self._openAndroid();
                                 } else {
                                     console.error('[adsdk] app_ads_on: 未在返回的 sdkId 列表中找到', appName);
+                                    self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on: 未在返回的 sdkId 列表中找到'+ appName);
                                 }
                             } else {
                                 console.error('[adsdk] app_ads_on 缺少或非法的 app_name 字段，忽略');
+                                self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on 缺少或非法的 app_name 字段，忽略');
                             }
                         } else {
                             console.error('[adsdk] app_ads_on 返回数据异常，忽略');
+                            self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on 返回数据异常，忽略');
                         }
                     }).catch(error => {
                         console.error("Error fetching API:", error);
+                        self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on'+ error);
                     });
                 } 
 
@@ -338,7 +342,10 @@ class adSdk {
                 type: 'interstitial',
                 value: 1
             })
-            this.checkAndSendMessages();
+            if(self.appads_on){
+
+                this.checkAndSendMessages();
+            }
         })
 
         this._eventAds.on('reward', (param1) => {
@@ -348,7 +355,10 @@ class adSdk {
                 type: 'reward',
                 value: 1
             })
-            this.checkAndSendMessages();
+            if(self.appads_on){
+
+                this.checkAndSendMessages();
+            }
         })
 
         this._eventAds.on('beforeAd', (param1, param2) => {
@@ -1857,7 +1867,7 @@ class adSdk {
                     }
                     // message
                     self.adsdklayer.push({
-                        type: 'GAME_TIME',
+                        type: 'game_time',
                         value: self._gameTime += 30
                     });
                 }, 30000);
@@ -1866,21 +1876,21 @@ class adSdk {
             // 添加上报分支
             if (ar1 === 'game_start') {
                 self.adsdklayer.push({
-                    type: 'GAME_START',
+                    type: 'game_start',
                     value: ar[2]
                 })
             }
 
             if (ar1 === 'level_start') {
                 self.adsdklayer.push({
-                    type: 'LEVEL_START',
+                    type: 'level_start',
                     value: ar[2]
                 })
             }
 
             if (ar1 === 'level_end') {
                 self.adsdklayer.push({
-                    type: 'LEVEL_END',
+                    type: 'level_end',
                     value: ar[2]
                 })
             }
