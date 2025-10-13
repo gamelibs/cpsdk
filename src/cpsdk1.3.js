@@ -215,9 +215,9 @@ class adSdk {
 
 
                 if (message.type === 'app_ads_on' && message["value"]) {
-                    
+
                     self._ajax("https://www.cpsense.com/public/item/sdk?id=" + self.pubid, "GET", "").then(A => {
-       
+
                         if (A && A.code === 1 && Array.isArray(A.data)) {
                             const appName = message["value"]["app_name"];
                             if (typeof appName === 'string' && appName.length > 0) {
@@ -234,7 +234,7 @@ class adSdk {
                                     self._openAndroid();
                                 } else {
                                     console.error('[adsdk] app_ads_on: 未在返回的 sdkId 列表中找到', appName);
-                                    self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on: 未在返回的 sdkId 列表中找到'+ appName);
+                                    self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on: 未在返回的 sdkId 列表中找到' + appName);
                                 }
                             } else {
                                 console.error('[adsdk] app_ads_on 缺少或非法的 app_name 字段，忽略');
@@ -246,9 +246,9 @@ class adSdk {
                         }
                     }).catch(error => {
                         console.error("Error fetching API:", error);
-                        self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on'+ error);
+                        self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on请求接口失败' + error);
                     });
-                } 
+                }
 
                 if (message.type === "set_pushtime" && typeof message.value === "number") {
                     self.updatePushInterval(message.value);
@@ -256,6 +256,11 @@ class adSdk {
 
                 // 如果android广告功能未开启则不处理后续广告消息
                 if (!self.appads_on) return;
+
+                if (message.type === 'click_ad' && message["value"]) {
+                    console.log('收到 click_ad 事件', message.value);
+                    window.gtag('event', 'click_ad', { send: 'sdk', 'AdType': message.value });
+                }
 
                 try {
                     switch (message.type) {
@@ -338,12 +343,12 @@ class adSdk {
         this._eventAds.on('interstitial', (param1) => {
             window.gtag('event', 'game_interstitialad', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog(param1, this.adType);
-            this.adsdklayer.push({
-                type: 'interstitial',
-                value: 1
-            })
-            if(self.appads_on){
 
+            if (this.appads_on) {
+                this.adsdklayer.push({
+                    type: 'interstitial',
+                    value: 1
+                })
                 this.checkAndSendMessages();
             }
         })
@@ -351,12 +356,12 @@ class adSdk {
         this._eventAds.on('reward', (param1) => {
             window.gtag('event', 'game_reward', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog(param1, this.adType);
-            this.adsdklayer.push({
-                type: 'reward',
-                value: 1
-            })
-            if(self.appads_on){
 
+            if (this.appads_on) {
+                this.adsdklayer.push({
+                    type: 'reward',
+                    value: 1
+                })
                 this.checkAndSendMessages();
             }
         })
@@ -445,7 +450,7 @@ class adSdk {
         this._eventAds.on('game_score', (data) => {
             this.__sdklog3("game_score", data)
             this.adsdklayer.push({
-                type: 'GAME_SCORE',
+                type: 'game_score',
                 value: data.score
             });
 
@@ -454,7 +459,7 @@ class adSdk {
         this._eventAds.on('game_level', (data) => {
             this.__sdklog3("game_level", data)
             this.adsdklayer.push({
-                type: 'GAME_LEVEL',
+                type: 'game_level',
                 value: data.level
             });
         })
@@ -463,7 +468,7 @@ class adSdk {
         this._eventAds.on('level_end', (data) => {
             this.__sdklog3("level_end", data)
             this.adsdklayer.push({
-                type: 'LEVEL_END',
+                type: 'level_end',
                 value: data
             })
         })
@@ -501,6 +506,9 @@ class adSdk {
 
                 self.__sdklog2("##########捕获到iframe点击##########");
                 window.gtag('event', 'click_ad', { send: 'sdk' });
+
+
+
 
             }
 

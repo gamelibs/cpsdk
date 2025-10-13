@@ -88,7 +88,7 @@ class iframeSdk {
                     this.__sdklog3('[GameStatus]上行', message.type, '|', message.value);
                     try {
                         switch (message.type) {
-                            case 'GAME_TIME':
+                            case 'game_time':
 
                                 this.events_iframe.emit('game_time', message.value);
                                 if (this.isAndroid) {
@@ -96,7 +96,7 @@ class iframeSdk {
                                 }
                                 break;
 
-                            case 'GAME_START':
+                            case 'game_start':
 
                                 this.events_iframe.emit('game_start', message.value);
                                 if (this.isAndroid) {
@@ -104,14 +104,14 @@ class iframeSdk {
                                 }
                                 break;
 
-                            case 'LEVEL_START':
+                            case 'level_start':
 
                                 this.events_iframe.emit('level_start', message.value);
                                 if (this.isAndroid) {
                                     window.CpsenseAppEvent.events(JSON.stringify([{ type: message.type, value: message.value }]));
                                 }
                                 break;
-                            case 'LEVEL_END':
+                            case 'level_end':
 
                                 this.events_iframe.emit('level_end', message.value);
                                 this.events_iframe.emit('game_score', message.value.score);
@@ -229,6 +229,9 @@ class iframeSdk {
                                 break;
                             case 'ad_error':
                                 this._postMessageToIframe({ type: 'ad_error', value: message.value });
+                                break;
+                            case 'click_ad':
+                                this._postMessageToIframe({ type: 'click_ad', value: message.value });
                                 break;
                             default:
                                 this.__sdklog3('[GameStatus]下行 未知消息类型，忽略:', message.type, message.value);
