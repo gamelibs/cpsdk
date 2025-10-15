@@ -810,6 +810,10 @@ class adSdk {
                         // console.log("ad close");
                         window.googletag.destroySlots([self.rewardedSlot]);
                         self.rewardedSlot = null;
+                    } else {
+                        if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
+                            self.gpt_callback.error();
+                        }
                     }
                 });
 
@@ -1236,15 +1240,13 @@ class adSdk {
 
         // 设置一个备用超时，如果30秒内没有任何GPT事件响应，直接报错
         self.gptBackupTimeout = setTimeout(() => {
-            if (self.req_ad_timeout) {
 
-                self.req_ad_timeout = false;
                 self._eventAds.emit('ad_error', 'error', 'gpt_no_response');
                 if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
                     self.gpt_callback.error('gpt_no_response');
                 }
-            }
-        }, 30000);
+      
+        }, 8000);
 
         window.googletag.cmd.push(() => {
             // 创建新的广告位
