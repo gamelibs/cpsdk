@@ -39,20 +39,9 @@ wsdk.adover = {
   interstitial: false,
 }
 
-wsdk._ready = false;
-wsdk._callbacks = [];
-wsdk._events = {}; // eventName -> [handlers]
-wsdk.config = {
-  appId: null,
-  apiKey: null,
-  instanceId: null,
-  templateId: null,
-  endpoints: {}
-};
-
 var wwwoso = wwwoso || woso || {}
 
-typeof wop.gamelog !== 'undefined' && wop.gamelog('channel', wop.channel)
+typeof gamelog !== 'undefined' && gamelog('channel', wop.channel)
 // creat DotFn
 wsdk.wgtag = (function (base) {
   return function () {
@@ -72,7 +61,7 @@ wsdk.wgtag = (function (base) {
         }
       }
     } catch (err) {
-      wop.gamelog(err)
+      gamelog(err)
     }
     base && base.apply(this, arguments)
   }
@@ -80,36 +69,15 @@ wsdk.wgtag = (function (base) {
 var adInstance,
   isTimeOut = true,
   mTimeOut = true
-
-function loadsdk(url) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script')
-    s.async = true
-    s.src = url
-    s.onload = () => resolve(true)
-    s.onerror = () => reject(new Error('脚本加载失败: ' + url))
-    document.head.appendChild(s)
-  })
+try {
+  var w_script = document.createElement('script')
+  w_script.async = true
+  w_script.src = 'https://www.cpsense.com/public/PRESDK3.0.1.js'
+  // w_script.setAttribute('crossorigin', 'anonymous');
+  document.head.appendChild(w_script)
+} catch (e) {
+  console.log(e)
 }
-
-var w_script = {
-  onload: null,
-  onerror: null,
-}
-
-let plurl = 'https://www.cpsense.com/public/PRESDK3.0.1.js'
-// let plurl = 'http://localhost:13600/src/cpsdk1.3.js'
-loadsdk(plurl).then(() => {
-
-  console.log('加载成功')
-  w_script.onload()
-}).catch((e) => {
-  console.error(e)
-  w_script.onerror()
-  wsdk.startGame()
-
-})
-
 
 // Initialize Advertising SDK
 w_script.onload = function () {
@@ -132,11 +100,8 @@ w_script.onload = function () {
           .showAd('fristAd')
           .then(() => {
             // gamecallback && gamecallback()
-            console.log('fristAd done')
           })
-          .catch((e) => {
-            console.log('fristAd err', e)
-          })
+          .catch(() => { })
         : null
     }
   }, 2000)
@@ -190,8 +155,8 @@ wsdk.startGame = () => {
       // console.log("inact-----", Math.floor(inactiveTime))
       if (window.w_AutoAding) lastInteractionTime = currentTime
       if (inactiveTime > si && !window.w_AutoAding) {
-        typeof wop.gamelog === 'function' &&
-          wop.gamelog('AutoAd', si, window.w_AutoAding)
+        typeof gamelog === 'function' &&
+          gamelog('AutoAd', si, window.w_AutoAding)
         lastInteractionTime = currentTime
         typeof wop !== 'undefined' && wop.trigger('interstitial')
       }
@@ -200,8 +165,8 @@ wsdk.startGame = () => {
       // console.log("play+++++", Math.floor(playinactiveTime))
       if (window.w_AutoAding) w_LastInteractionAdTime = currentTime
       if (playinactiveTime > ssi && !window.w_AutoAding) {
-        typeof wop.gamelog === 'function' &&
-          wop.gamelog('AutoAd', ssi, !window.w_AutoAding)
+        typeof gamelog === 'function' &&
+          gamelog('AutoAd', ssi, !window.w_AutoAding)
         w_LastInteractionAdTime = currentTime
         typeof wop !== 'undefined' && wop.trigger('interstitial')
       }
@@ -231,7 +196,7 @@ wsdk.prob = (prob) => {
     return true
   } else {
     let m = Math.random()
-    wop.gamelog(m)
+    gamelog(m)
     if (m < prob) {
       return true
     } else {
@@ -307,14 +272,7 @@ wsdk.showAd = (type, callback) => {
         // Display inset ads
         function showFristAd() {
           let isTimeOut = false
-          const st_time = setTimeout(() => {
-            clearTimeout(st_time)
-            if (!isTimeOut) {
-              wop.gamelog('fristAd timeout 3s')
-              wsdk.gameDot(DOT.AD_ERROR, 'fristAd timeout')
-              w_handleError('timeout', true)
-            }
-          }, 3000)
+
           try {
             adInstance.interstitialAd({
               beforeAd() {
@@ -331,21 +289,59 @@ wsdk.showAd = (type, callback) => {
               },
               error(err) {
                 isTimeOut = true
-                wop.gamelog('fristAd', err)
+                gamelog('fristAd', err)
                 wsdk.gameDot(DOT.AD_ERROR, 'fristAd ' + err)
                 w_handleError(err, true)
               },
             })
           } catch (error) {
-            console.log('fristAd error', error)
+
           }
 
-
+          const st_time = setTimeout(() => {
+            clearTimeout(st_time)
+            if (!isTimeOut) {
+              gamelog('fristAd timeout 3s')
+              wsdk.gameDot(DOT.AD_ERROR, 'fristAd timeout')
+              w_handleError('timeout', true)
+            }
+          }, 3000)
         }
 
         // Display inset ads
         function showInterstitialAd(callback) {
           let isAdError = false
+          adInstance &&
+            adInstance.interstitialAd({
+              beforeAd() {
+                isAdError = true
+                wsdk.gameDot(DOT.GAME_INTERSTITIAL_OPEN, 'ad open')
+                if (wwwoso.sdkType === 2) {
+                  wsdk.gameplay('pause')
+                }
+                callback && callback('beforeAd')
+                window.w_AutoAding = true
+              },
+              afterAd() {
+                isAdError = true
+                wsdk.gameDot(DOT.GAME_INTERSTITIAL_VIEWED, 'afterAd viewed')
+                if (wwwoso.sdkType === 2) {
+                  wsdk.gameplay('start')
+                }
+                callback && callback('afterAd-yes')
+                w_handleSuccess()
+              },
+              error(err) {
+                isAdError = true
+                wsdk.gameDot(DOT.AD_ERROR, err)
+                if (wwwoso.sdkType === 2) {
+                  wsdk.gameplay('start')
+                }
+                callback && callback('afterAd-Error-no')
+                w_handleError(err)
+              },
+            })
+
           const st_Inter = setTimeout(() => {
             clearTimeout(st_Inter)
 
@@ -358,60 +354,10 @@ wsdk.showAd = (type, callback) => {
               w_handleError('timerout')
             }
           }, 4000)
-          adInstance &&
-            adInstance.interstitialAd({
-              beforeAd() {
-                isAdError = true
-                wsdk.gameDot(DOT.GAME_INTERSTITIAL_OPEN, 'ad open')
-                // Pause gameplay and audio before ad
-                if (wwwoso.sdkType === 2) {
-                  wsdk.gameplay('pause')
-                }
-                try { wsdk.pauseAllAudio && wsdk.pauseAllAudio(); } catch (e) { }
-                callback && callback('beforeAd')
-                window.w_AutoAding = true
-              },
-              afterAd() {
-                isAdError = true
-                wsdk.gameDot(DOT.GAME_INTERSTITIAL_VIEWED, 'afterAd viewed')
-                // Resume gameplay and audio after ad
-                if (wwwoso.sdkType === 2) {
-                  wsdk.gameplay('start')
-                }
-                try { wsdk.resumeAllAudio && wsdk.resumeAllAudio(); } catch (e) { }
-                callback && callback('afterAd-yes')
-                w_handleSuccess()
-              },
-              error(err) {
-                isAdError = true
-                wsdk.gameDot(DOT.AD_ERROR, err)
-                // Ensure audio resumed on error
-                if (wwwoso.sdkType === 2) {
-                  wsdk.gameplay('start')
-                }
-                try { wsdk.resumeAllAudio && wsdk.resumeAllAudio(); } catch (e) { }
-                callback && callback('afterAd-Error-no')
-                w_handleError(err)
-              },
-            })
-
-
         }
 
         //Display motivational video advertisements
         function showRewardedVideoAd(callback) {
-          const st_video = setTimeout(() => {
-            clearTimeout(st_video)
-
-            if (!isAdError) {
-              wsdk.gameDot(DOT.AD_ERROR, 'video timerout')
-              if (wwwoso.sdkType === 2) {
-                wsdk.gameplay('start')
-              }
-              callback && callback('afterAd-v-no')
-              w_handleError('timerout')
-            }
-          }, 4000)
           let isAdError = false
           adInstance.rewardAd({
             beforeAd() {
@@ -455,7 +401,18 @@ wsdk.showAd = (type, callback) => {
             },
           })
 
+          const st_video = setTimeout(() => {
+            clearTimeout(st_video)
 
+            if (!isAdError) {
+              wsdk.gameDot(DOT.AD_ERROR, 'video timerout')
+              if (wwwoso.sdkType === 2) {
+                wsdk.gameplay('start')
+              }
+              callback && callback('afterAd-v-no')
+              w_handleError('timerout')
+            }
+          }, 4000)
         }
 
         if (type === 'rewarded') {
@@ -472,7 +429,7 @@ wsdk.showAd = (type, callback) => {
         //     callback && callback("afterAd-Error-no");
         //     return;
         // };
-        // wop.gamelog("ad", type)
+        // gamelog("ad", type)
 
         if (type === 'interstitial' || !type) {
           if (!wsdk.prob(wop.adProb)) {
@@ -597,9 +554,9 @@ var wop = wop || {}
 
 /**Report game events*/
 wsdk.gameDot = (events, value = '') => {
-  // wop.gamelog("dot_type", events, value);
+  // gamelog("dot_type", events, value);
   if (!wop.isDot) {
-    wop.gamelog('No dot', events, value)
+    gamelog('No dot', events, value)
     return
   }
   switch (events) {
@@ -687,305 +644,63 @@ function upTimer() {
 }
 
 function dotPower(type, data) {
-
-}
-
-// storage
-wsdk.getItem = (key) => {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (raw == null) return null;
-    try { return JSON.parse(raw); } catch (e) { return raw; }
-  } catch (e) { return null; }
-}
-
-wsdk.setItem = (key, value) => {
-  try {
-    const str = typeof value === 'string' ? value : JSON.stringify(value);
-    window.localStorage.setItem(key, str);
-    return true;
-  } catch (e) { return false; }
-}
-
-// IndexedDB 读取工具：
-wsdk.readIndexedDB = async (dbName, storeName = 'keyvaluepairs', key) => {
-  const openDB = (name) => new Promise((resolve, reject) => {
-    try {
-      const req = indexedDB.open(name);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-      // do not attempt to change schema here
-      req.onupgradeneeded = () => { };
-    } catch (e) { reject(e); }
-  });
-
-  const getAll = (db, store) => new Promise((resolve, reject) => {
-    try {
-      const tx = db.transaction(store, 'readonly');
-      const os = tx.objectStore(store);
-      const r = os.getAll();
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
-    } catch (e) { reject(e); }
-  });
-
-  const getKey = (db, store, k) => new Promise((resolve, reject) => {
-    try {
-      const tx = db.transaction(store, 'readonly');
-      const os = tx.objectStore(store);
-      const r = os.get(k);
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
-    } catch (e) { reject(e); }
-  });
-
-  try {
-    const db = await openDB(dbName);
-    let raw;
-    if (typeof key === 'undefined') raw = await getAll(db, storeName); else raw = await getKey(db, storeName, key);
-
-    const parseValue = (item) => {
-      // some stores return objects like { key: ..., value: ... } or direct values
-      const v = (item && (item.value ?? item)) || item;
-      if (typeof v === 'string') {
-        try { return JSON.parse(v); } catch (e) { return v; }
-      }
-      return v;
-    };
-
-    if (typeof key === 'undefined') {
-      // normalize array of entries
-      return Array.isArray(raw) ? raw.map(parseValue) : raw;
-    } else {
-      if (raw == null) return null;
-      return parseValue(raw);
-    }
-  } catch (e) {
-    this.__sdklog('readIndexedDB error', e && e.message ? e.message : e);
-    return null;
-  }
-}
-
-// event system
-wsdk.on = (eventName, handler) => {
-  if (!wsdk._events[eventName]) wsdk._events[eventName] = [];
-  wsdk._events[eventName].push(handler);
-}
-
-wsdk.off = (eventName, handler) => {
-  if (!wsdk._events[eventName]) return;
-  if (!handler) { delete wsdk._events[eventName]; return; }
-  const idx = wsdk._events[eventName].indexOf(handler);
-  if (idx > -1) wsdk._events[eventName].splice(idx, 1);
-}
-
-wsdk.emit = (eventName, payload) => {
-  const list = wsdk._events[eventName] || [];
-  // 统一事件日志格式，类似GA上报格式
-  const logData = payload && typeof payload === 'object' ? Object.keys(payload).map(key => `${key}: ${payload[key]}`).join(', ') : String(payload || '');
-  console.log(`[wwwoso] Event: ${eventName}${logData ? ', ' + logData : ''}`);
-  list.forEach(fn => { try { fn(payload); } catch (e) { } });
-}
-
-
-wsdk.watchStorage = (key, callback, interval = 2000) => {
-  // If localStorage unavailable, return a noop stop function
-  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined' || window.localStorage == null) {
-    return () => { };
+  var datavalue = {
+    score: 0,
+    success: true,
+    level_name: 0,
   }
 
-  // Use raw string values for reliable equality checks
-  let lastRaw = null;
-  // try { lastRaw = window.localStorage.getItem(key); } catch (e) { lastRaw = null; }
+  switch (type) {
+    case 1: //ex1 localStorage
+      datavalue.score = data[1]
+      datavalue.level_name = data[2]
+      wsdk.gameDot(DOT.LEVEL_END, datavalue)
+      break
+    case 2: //ex2 IndexedDB
+      let database_name = data[0]
+      let version_number = 2
 
-  const timer = setInterval(() => {
-    try {
-      const newRaw = window.localStorage.getItem(key);
-      if (newRaw !== lastRaw) {
-        // parse new value; if parsing fails, treat as raw string
-        let parsedNew = null;
-        try { parsedNew = wsdk.getItem ? wsdk.getItem(key) : (newRaw == null ? null : JSON.parse(newRaw)); } catch (e) { parsedNew = newRaw; }
+      let request = indexedDB.open(database_name, version_number)
 
-        // Only call callback when parsedNew is non-null/defined and different from previous parsed value
-        let parsedLast = null;
-        try { parsedLast = lastRaw == null ? null : (wsdk.getItem ? null : JSON.parse(lastRaw)); } catch (e) { parsedLast = lastRaw; }
+      request.onsuccess = function (event) {
+        let db = event.target.result
+        let store_name = 'keyvaluepairs'
 
-        const isDifferent = (function (a, b) {
-          try { return JSON.stringify(a) !== JSON.stringify(b); } catch (e) { return a !== b; }
-        })(parsedNew, parsedLast);
+        let transaction = db.transaction([store_name], 'readonly')
+        let objectStore = transaction.objectStore(store_name)
 
-        if (parsedNew != null && isDifferent) {
-          try { callback(parsedNew); } catch (e) { /* swallow */ }
+        let getRequest1 = objectStore.get(data[1])
+
+        getRequest1.onsuccess = function (event) {
+          let value = event.target.result
+          datavalue.score = value || 0
+          console.log('score', value)
         }
 
-        lastRaw = newRaw;
-      }
-    } catch (e) {
-      // ignore and continue
-    }
-  }, interval);
-
-  // 提供一个 stop 方法
-  return () => clearInterval(timer);
-}
-
-// tracking API
-wsdk.trackEvent = async (name, payload = {}) => {
-
-  wsdk.gameDot(name, payload);
-  // if (wop.isDotWGA) {
-  //   if (adInstance && adInstance._eventAds) {
-  //     adInstance._eventAds.emit(name, payload);
-  //   }
-  // } else {
-    
-  //   console.log("idDotWGA no");
-  // }
-  // wsdk.emit(name, payload);
-  // try {
-  //   const url = this.config.endpoints?.eventUrl || this.config.endpoints?.reportUrl || null;
-  //   if (!url) return { delivered: false, reason: 'no_endpoint' };
-  //   // fire-and-forget
-  //   fetch(url, {
-  //     method: 'POST',
-  //     headers: { 'Content-Type': 'application/json' },
-  //     body: JSON.stringify({ type: name, ts: Date.now(), instanceId: this.config.instanceId, templateId: this.config.templateId, data: payload })
-  //   }).catch(() => { });
-  //   return { delivered: true };
-  // } catch (e) { return { delivered: false, error: e.message }; 
-
-}
-
-wsdk.trackLevelEnd = async (value = {}) => {
-  const data = {
-    level_name: value.level_name || 0,
-    success: value.success || false,
-    score: value.score || 0,
-    best: value.best || 0,
-    game_name: wop.gameTitle,
-    dev_name: wop.channel,
-  }
-  return await wsdk.trackEvent('level_end', data);
-}
-
-wsdk.trackScore = async (payload = {}) => {
-  // 支持两种调用方式：trackScore(number) 或 trackScore({score: number})
-  let score;
-  let scorePayload;
-
-  if (typeof payload === 'number') {
-    score = payload;
-    scorePayload = { score: payload };
-  } else if (payload && typeof payload.score === 'number') {
-    score = payload.score;
-    scorePayload = payload;
-  } else {
-    return { delivered: false, reason: 'invalid_score' };
-  }
-
-  if (score == null) return { delivered: false, reason: 'invalid_score' };
-
-  // emit local
-
-  // use generic trackEvent
-  return await wsdk.trackEvent('game_score', scorePayload);
-}
-
-wsdk.trackLevel = async (payload = {}) => {
-  let level;
-  let levelPayload;
-
-  if (typeof payload === 'number') {
-    level = payload;
-    levelPayload = { level: payload };
-  } else if (payload && typeof payload.level === 'number') {
-    level = payload.level;
-    levelPayload = payload;
-  } else {
-    return { delivered: false, reason: 'invalid_level' };
-  }
-
-  if (level == null) return { delivered: false, reason: 'invalid_level' };
-
-  // emit local
-  // wsdk.emit('level', levelPayload);
-  // use generic trackEvent
-  return await wsdk.trackEvent('level', levelPayload);
-}
-
-// watchIndexedDB: poll IndexedDB using wsdk.readIndexedDB and invoke callback when parsed value changes
-// - dbName: string or array of candidate DB names (will try in order until one returns data)
-// - storeName: object store name (default 'keyvaluepairs')
-// - key: optional key (undefined => getAll)
-// - callback: function(newVal, meta) called when parsed newVal is non-null and different from previous
-// - interval: polling ms (default 2000)
-wsdk.watchIndexedDB = (dbName, storeName = 'keyvaluepairs', key, callback, interval = 2000) => {
-  if (typeof window === 'undefined' || typeof window.wsdk === 'undefined' || typeof window.wsdk.readIndexedDB !== 'function') {
-    return () => { };
-  }
-
-  const candidates = Array.isArray(dbName) ? dbName.slice() : [dbName];
-  let chosen = null;
-  let lastSerialized = null;
-  let stopped = false;
-
-  const safeSerialize = (v) => {
-    try {
-      if (v instanceof ArrayBuffer) return `ArrayBuffer:${v.byteLength}`;
-      if (v instanceof Blob) return `Blob:${v.size}:${v.type}`;
-      return JSON.stringify(v);
-    } catch (e) {
-      try { return String(v); } catch (e2) { return 'UNSERIALIZABLE'; }
-    }
-  };
-
-  const probe = async () => {
-    if (stopped) return;
-    try {
-      if (!chosen) {
-        for (const name of candidates) {
-          try {
-            const val = await window.wsdk.readIndexedDB(name, storeName, key);
-            if (val != null && (Array.isArray(val) ? val.length > 0 : true)) {
-              chosen = name;
-              const s = safeSerialize(val);
-              if (s !== lastSerialized) {
-                lastSerialized = s;
-                try { callback(val, { db: chosen }); } catch (e) { console.error('watchIndexedDB callback error', e); }
-              }
-              break;
-            }
-          } catch (e) {
-            // ignore individual db errors
-          }
+        getRequest1.onerror = function (event) {
+          console.log('score err', event)
         }
-      } else {
-        try {
-          const val = await window.wsdk.readIndexedDB(chosen, storeName, key);
-          const s = safeSerialize(val);
-          if (s !== lastSerialized) {
-            lastSerialized = s;
-            if (val != null) {
-              try { callback(val, { db: chosen }); } catch (e) { console.error('watchIndexedDB callback error', e); }
-            }
-          }
-        } catch (e) {
-          // reading chosen db failed; reset chosen to try others next round
-          chosen = null;
+
+        let getRequest2 = objectStore.get(data[2])
+
+        getRequest2.onsuccess = function (event) {
+          let value = event.target.result
+          datavalue.level_name = value || 0
+          console.log('level', value)
+        }
+
+        getRequest2.onerror = function (event) {
+          console.log('level err', event)
+        }
+
+        transaction.oncomplete = function (event) {
+          db.close()
+          wsdk.gameDot(DOT.LEVEL_END, datavalue)
         }
       }
-    } catch (e) {
-      // top-level probe error shouldn't stop polling
-      console.error('watchIndexedDB probe error', e);
-    }
-  };
 
-  // run first probe immediately, then start interval
-  probe();
-  const timer = setInterval(probe, interval);
-
-  return () => {
-    stopped = true;
-    clearInterval(timer);
-  };
-};
+      request.onerror = function (event) {
+        console.log('open indexdata')
+      }
+  }
+}
