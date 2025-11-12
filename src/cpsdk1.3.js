@@ -3,6 +3,7 @@
  * 添加通知ifame消息机制(20250809)
  * 增加android广告(20250923)
  * 增加广告验证判断逻辑(20251011)
+ * 增加GPT广告gameid(20251027)
  */
 
 class adSdk {
@@ -849,8 +850,10 @@ class adSdk {
                         console.log('event.isEmpty err', e);
                     }
                 });
+                googletag.pubads().setTargeting("game_id", self.gameid);
 
                 window.googletag.enableServices();
+
 
             });
 
