@@ -1,7 +1,7 @@
 /**
  * iframeSdk 1.0
- * 支持iframe内嵌游戏与宿主页面的消息通信(20250923)
  * 支持android广告调用,上下桥接(20250923)
+ * 修改为发送消息到所有iframe,以保证将消息发送到目标iframe(20251127)
  */
 
 class iframeSdk {
@@ -253,58 +253,39 @@ class iframeSdk {
      * 通用的向iframe发送消息的封装方法
      * @param {Object} message - 要发送的消息对象
      * @param {string|HTMLElement|Window} target - 目标iframe
-     * @param {string} logPrefix - 日志前缀
      * @returns {boolean} - 发送是否成功
      */
-    _postMessageToIframe(message, target, logPrefix = 'cpsense-iframe-message') {
-        let win = null;
-        let targetName = 'game-preview';
-
-        if (!target) {
-            // 默认查找iframe的逻辑
-            let el = document.getElementById('game-preview');
-            if (!(el && el.tagName === 'IFRAME')) {
-                el = document.getElementById('gameFrame');
-                targetName = 'gameFrame';
-            }
-            if (!(el && el.tagName === 'IFRAME')) {
-                el = document.querySelector('.game-preview');
-                targetName = '.game-preview';
-            }
-            if (!(el && el.tagName === 'IFRAME')) {
-                el = document.querySelector('iframe');
-                targetName = 'first iframe';
-            }
-            if (el && el.tagName === 'IFRAME') {
-                win = el.contentWindow;
-            }
-        } else if (typeof target === 'string') {
-            const el = document.getElementById(target);
-            if (el && el.tagName === 'IFRAME') {
-                win = el.contentWindow;
-                targetName = target;
-            }
-        } else if (target instanceof Window) {
-            win = target;
-            targetName = 'window object';
-        } else if (target && target.tagName === 'IFRAME') {
-            win = target.contentWindow;
-            targetName = target.id || 'iframe element';
-        }
-
-        if (!win) {
-            console.warn(`[IframeSdk] ${logPrefix} send failed: no target iframe found`);
-            return false;
-        }
-
+    _postMessageToIframe(message) {
         try {
-            win.postMessage(message, '*');
-            // this.__sdklog3(`[IframeSdk] sent ${logPrefix} to ${targetName}:`, JSON.stringify(message));
-            return true;
-        } catch (e) {
-            console.warn(`[IframeSdk] postMessage ${logPrefix} error:`, e);
-            return false;
-        }
+            const allIframes = document.querySelectorAll("iframe");
+            const iframeCount = allIframes.length;
+
+            if (iframeCount === 0) {
+              console.log("未找到任何 iframe，广播取消");
+              return;
+            }
+
+            // 2. 遍历所有 iframe，逐个发送消息
+            allIframes.forEach((iframe, index) => {
+              try {
+                // 容错1：跳过未加载完成的 iframe（contentWindow 未初始化）
+                if (!iframe.contentWindow) {
+                //   console.log(`跳过第 ${index + 1} 个 iframe（未加载完成）`);
+                  return;
+                }
+                iframe.contentWindow.postMessage(message, "*")
+               
+                // console.log(`第 ${index + 1} 个 iframe 广播成功`);
+              } catch (err) {
+                // 容错3：单个 iframe 发送失败（如跨域受限、iframe 已被移除），不影响其他 iframe
+                console.log(`第 ${index + 1} 个 iframe 广播失败：`, err.message);
+              }
+            });
+
+            // console.log("所有 iframe 广播完成");
+          } catch (globalErr) {
+            console.log("广播整体异常：", globalErr.message);
+          }
     }
 
 

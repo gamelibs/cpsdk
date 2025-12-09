@@ -1,9 +1,8 @@
 /**
  * CPSDK 1.3
- * 添加通知ifame消息机制(20250809)
- * 增加android广告(20250923)
  * 增加广告验证判断逻辑(20251011)
  * 增加GPT广告gameid(20251027)
+ * 增加广告回退到top页逻辑(20251112)
  */
 
 class adSdk {
@@ -19,6 +18,37 @@ class adSdk {
         this.is_ad_test = new URLSearchParams(document.location.search).get("vb") === "beta";
         this.dev_name = new URLSearchParams(document.location.search).get("dev") || this.config.client || 'default';
         this.gamePlayTimer = null;
+
+
+        // 防止 iframe 内误触发返回导致跳出页面
+        // 潜在副作用（仅特殊情况下）调试时希望在 iframe 内自由返回上层页面返回操作会被阻止
+        (function () {
+            if (window.top === window.self && !/Safari/i.test(navigator.userAgent)) return;
+
+            let blockPop = false;
+
+            // 注入一条虚拟历史记录
+            history.replaceState({ page: 'init' }, '', location.href);
+            history.pushState({ page: 'adblock' }, '', location.href);
+
+            // 拦截回退行为
+            window.addEventListener('popstate', function (e) {
+                if (blockPop) return;
+                blockPop = true;
+
+                // Safari 误触发时强制再 push 一次，保持不动
+                history.pushState({ page: 'adblock' }, '', location.href);
+                blockPop = false;
+            });
+
+            // 防止部分版本 Safari 调用 window.close() 导致退出
+            const noop = () => { };
+            try {
+                Object.defineProperty(window, 'close', { value: noop, writable: false });
+            } catch (e) {
+                window.close = noop;
+            }
+        })();
 
         this._eventAdsLast = {};
         this.ready = new Promise((resolve) => { this._readyResolve = resolve; });
@@ -307,10 +337,15 @@ class adSdk {
         };
 
 
+
+
         // 监听来自父页面的消息
+
         window.addEventListener('message', (event) => {
             try { this._appeventCallback(event.data) } catch (e) { console.log('message event err', e) }
         });
+
+
         // 原生回调处理
         window.CpsenseAppEventCallBack = (event) => {
             if (this.isFramed) { return; }
@@ -1244,11 +1279,11 @@ class adSdk {
         // 设置一个备用超时，如果30秒内没有任何GPT事件响应，直接报错
         self.gptBackupTimeout = setTimeout(() => {
 
-                self._eventAds.emit('ad_error', 'error', 'gpt_no_response');
-                if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
-                    self.gpt_callback.error('gpt_no_response');
-                }
-      
+            self._eventAds.emit('ad_error', 'error', 'gpt_no_response');
+            if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
+                self.gpt_callback.error('gpt_no_response');
+            }
+
         }, 8000);
 
         window.googletag.cmd.push(() => {
