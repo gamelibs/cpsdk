@@ -677,8 +677,8 @@ class adSdk {
 
         if (code.startsWith('https://pubads.g.doubleclick.net/gampad/ads?iu=')) {
             this.adType = this.adsType.IMA;
-            this.is_gpt = true; // adx
-            this.ima_code = code; // adx广告代码
+            this.is_ima = true; 
+            this.ima_code = code; 
             this._adsInitialized = true;
             this._openIma();
             return;
