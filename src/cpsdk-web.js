@@ -9,7 +9,7 @@
     const ENABLE_THIRD_PARTY = true;
     const ENABLE_GAME_CONFIG = true;
     const ENABLE_SDK_LOG = true;
-    const DEFAULT_PROD_CFG_BASE = '';
+    const DEFAULT_PROD_CFG_BASE = 'https://cpsense.heiheigame.com/gameconfig/cpzhangyun/';
     const DEFAULT_BETA_CFG_BASE = 'http://localhost:13200/api/v1/game/1019/';
 
     // 解析 query 字符串为键值对（键统一为小写，值为原始字符串）
@@ -65,15 +65,13 @@
                 }
             }
 
-            // 1) 将原始游戏对象的“顶层字段”并入 wop（浅拷贝，避免循环）
+            // 1) 将原始游戏对象的“顶层字段”并入 wop（浅拷贝，避免循环），不再额外挂载完整 game 对象，保证 wop 结构保持扁平
             if (raw && typeof raw === 'object') {
                 Object.keys(raw).forEach(k => {
                     const v = raw[k];
                     if (k === 'info' || k === 'sdkConfig') return;
                     out[k] = v;
                 });
-                // 保留完整引用
-                out.game = raw;
                 if (!sdk && raw.sdkConfig) out.sdk = raw.sdkConfig;
                 try {
                     const title = (raw && raw.title) || (raw && raw.info && raw.info.title) || '';
@@ -385,9 +383,9 @@
                         const wopTarget = ensureObject('wop');
                         if (wopTarget !== target) Object.assign(wopTarget, next);
 
-                        // 打印赋值后的 window.wop（便于排查时序/覆盖问题）
+                        // 直接打印当前的 window.wop，对应结构已被简化为“扁平游戏配置 + sdk”等基础字段
                         try {
-                            this.__sdklog('window.wop assigned', global.wop);
+                            // this.__sdklog('window.wop assigned', global.wop);
                             console.log('[Cpsdk] window.wop assigned:', global.wop);
                         } catch (_) {}
                     }
