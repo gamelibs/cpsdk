@@ -10,9 +10,11 @@ class iframeSdk {
 
         this.isAndroid = (!!window.CpsenseAppEvent && typeof window.CpsenseAppEvent.events === 'function');
 
+        this.appads_on = false; // 是否开启广告标记
         // 封闭的事件，供同域脚本通过实例访问
         this.events_iframe = {
             listeners: {
+                'appads_on': [],
                 'game_time': [],
                 'game_start': [],
                 'game_score': [],
@@ -88,6 +90,11 @@ class iframeSdk {
                     this.__sdklog3('[GameStatus]上行', message.type, '|', message.value);
                     try {
                         switch (message.type) {
+                            case 'appads_on':
+
+                                this.appads_on = true;
+                            break;
+
                             case 'game_time':
 
                                 this.events_iframe.emit('game_time', message.value);
@@ -132,14 +139,14 @@ class iframeSdk {
                             case 'interstitial':
 
                                 this.events_iframe.emit('interstitial', message.value);
-                                if (this.isAndroid) {
+                                if (this.isAndroid && this.appads_on) {
                                     window.CpsenseAppEvent.events(JSON.stringify([{ type: message.type, value: message.value }]));
                                 }
                                 break;
                             case 'reward':
 
                                 this.events_iframe.emit('reward', message.value);
-                                if (this.isAndroid) {
+                                if (this.isAndroid && this.appads_on) {
                                     window.CpsenseAppEvent.events(JSON.stringify([{ type: message.type, value: message.value }]));
                                 }
                                 break;

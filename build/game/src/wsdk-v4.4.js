@@ -107,10 +107,10 @@ var w_script = {
   onerror: null,
 }
 
-// let plurl = 'https://cpsense.heiheigame.com/libs/cpsdk1.3.js'
+// let plurl = 'https://cpsense.heiheigame.com/libs/prsdk1.3.js'
 // Resolve the loader URL relative to this script file location. When this file
 // is included from a page (for example game/index.html -> ../src/wsdk-v4.4.js),
-// using './cpsdk1.3.js' would be resolved relative to the page, not this file.
+// using './prsdk1.3.js' would be resolved relative to the page, not this file.
 // We prefer the same directory as this script file.
 function resolveRelativeToCurrentScript(relPath) {
   try {
@@ -127,7 +127,7 @@ function resolveRelativeToCurrentScript(relPath) {
   try { return new URL(relPath, document.location.href).toString(); } catch (e) { return relPath; }
 }
 
-let plurl = resolveRelativeToCurrentScript('cpsdk1.3.js');
+let plurl = resolveRelativeToCurrentScript('prsdk1.3.js');
 loadsdk(plurl).then(() => {
 
   console.log('加载成功', plurl)

@@ -683,7 +683,7 @@ class adSdk {
         const params = args.map(formatParam).join(' ');
 
         console.log(
-            `%c ***CPSDK***: ${params}`,
+            `%c ***prsdk***: ${params}`,
 
             'background-color: #f9f9f9; ' +
             'border: 2px solid #8e44ad; ' +
@@ -705,7 +705,7 @@ class adSdk {
         const params = args.map(formatParam).join(' ');
 
         console.log(
-            `%c ***CPSDK***: ${params}`,
+            `%c ***prsdk***: ${params}`,
             'background: linear-gradient(to right, #8e44ad, #ba43ff); ' +
             'color: white; ' +
             'padding: 5px 15px; ' +

@@ -1,7 +1,13 @@
 /**
- * CPSDK 1.2
- * 添加上报捕获ifrme点击(20250804)
- * 修复上报不准确,以广告ID为依据(20250808)
+ * prsdk 1.1
+ * 2025-06-23
+ * 配置:3种广告
+ * URL?vb=beta开始测试广告
+ * 可以不回调beforeAd()
+ * 只有adsense有首次判定is_first
+ * 修改首次广告为preroll(20250703)
+ * 修复adx重复创建容器BUG(20250714)
+ * 修复gpt上报reward事件BUG(20250716)
  */
 
 class adSdk {
@@ -16,7 +22,6 @@ class adSdk {
         this.is_ad_test = new URLSearchParams(document.location.search).get("vb") === "beta";
         this.dev_name = new URLSearchParams(document.location.search).get("dev") || this.config.client || 'default';
         this.gamePlayTimer = null;
-        // this.dotData = {};
         this._insert_tagmanager();
 
         this._eventAds = {
@@ -116,8 +121,6 @@ class adSdk {
         };
 
 
-
-
         this.adsType = { ADSENSE: 'adsense', IMA: 'ima', GPT: 'gpt' }; // 广告类型
 
         // ads事件流程 
@@ -188,67 +191,6 @@ class adSdk {
                 this.__sdklog2("*******adevent**********", param1, param2, this.adType);
             }
         })
-
-        try {
-
-            const self = this;
-
-
-            const AD_IFRAME_DOMAINS = ['googlesyndication.com', 'doubleclick.net'];
-            let lastCheckTime = 0;
-            const CLICK_THRESHOLD = 1000;
-
-            // 记录已上报的广告容器ID
-            const reportedAdIds = new Set();
-
-            function isGoogleAdFrame(el) {
-                if (!el || el.tagName !== 'IFRAME') return false;
-                if (el.src) {
-                    for (var i = 0; i < AD_IFRAME_DOMAINS.length; i++) {
-                        if (el.src.indexOf(AD_IFRAME_DOMAINS[i]) !== -1) {
-                            return true;
-                        }
-                    }
-
-                }
-                const idMatch = el.id && el.id.indexOf('google_ads_iframe') !== -1;
-                const nameMatch = el.name && el.name.indexOf('google_ads_iframe') !== -1;
-                const titleMatch = el.title && el.title.toLowerCase().indexOf('ad') !== -1;
-                return idMatch || nameMatch || titleMatch || false;
-            }
-
-            function reportAdClick(el) {
-                const adContainerId = el.getAttribute('data-google-container-id') || 'unknown';
-                if (reportedAdIds[adContainerId]) return;
-                reportedAdIds[adContainerId] = true;
-
-                self.__sdklog2("##########捕获到iframe点击##########");
-                window.gtag('event', 'click_ad', { send: 'sdk' });
-
-            }
-
-            function checkAdClick() {
-                const now = Date.now();
-                if (now - lastCheckTime < CLICK_THRESHOLD) return;
-                const activeEl = document.activeElement;
-                if (isGoogleAdFrame(activeEl)) {
-                    lastCheckTime = now;
-                    reportAdClick(activeEl);
-                }
-            }
-
-            window.addEventListener('blur', checkAdClick, true);
-            document.addEventListener('visibilitychange', () => {
-                if (document.hidden) {
-                    checkAdClick();
-                }
-            }, true);
-
-
-
-        } catch (e) {
-            self.__sdklog3("ad跳出监听器失败:", e.message);
-        }
 
         this._initAds();
 
@@ -830,7 +772,7 @@ class adSdk {
         if (!self.adContainer || !self.videoContent) {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             self._destroyAdxDom(); // 清理广告容器
-
+            
             self._eventAds.emit('error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
@@ -1272,7 +1214,7 @@ class adSdk {
         const params = args.map(formatParam).join(' ');
 
         console.log(
-            `%c ***CPSDK***: ${params}`,
+            `%c ***prsdk***: ${params}`,
 
             'background-color: #f9f9f9; ' +
             'border: 2px solid #8e44ad; ' +
@@ -1294,7 +1236,7 @@ class adSdk {
         const params = args.map(formatParam).join(' ');
 
         console.log(
-            `%c ***CPSDK***: ${params}`,
+            `%c ***prsdk***: ${params}`,
             'background: linear-gradient(to right, #8e44ad, #ba43ff); ' +
             'color: white; ' +
             'padding: 5px 15px; ' +
@@ -1367,8 +1309,7 @@ class adSdk {
                 'game_interstitialad',
                 'game_reward',
                 'game_reward_viewed',
-                'game_interstitialad_viewed',
-                'click_ad'
+                'game_interstitialad_viewed'
             ];
 
             let event_List = [

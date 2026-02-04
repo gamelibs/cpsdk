@@ -1,16 +1,14 @@
 /**
- * CPSDK 1.3
- * 增加广告验证判断逻辑(20251011)
- * 增加GPT广告gameid(20251027)
- * 增加广告回退到top页逻辑(20251112)
+ * prsdk 1.2
+ * 添加上报捕获ifrme点击(20250804)
+ * 修复上报不准确,以广告ID为依据(20250808)
  */
 
 class adSdk {
     constructor(config) {
         this.config = config;
         this.adSdk_isReady = true;
-        this.isFramed = (typeof window.parent !== 'undefined' && window.parent !== window);
-        this.isAndroid = (!this.isFramed && !!window.CpsenseAppEvent && typeof window.CpsenseAppEvent.events === 'function');
+
         window.dataLayer = window.dataLayer || [];
         this.gameid = new URLSearchParams(document.location.search).get("gameid");
         this.pubid = new URLSearchParams(document.location.search).get("pubid");
@@ -18,42 +16,9 @@ class adSdk {
         this.is_ad_test = new URLSearchParams(document.location.search).get("vb") === "beta";
         this.dev_name = new URLSearchParams(document.location.search).get("dev") || this.config.client || 'default';
         this.gamePlayTimer = null;
+        // this.dotData = {};
+        this._insert_tagmanager();
 
-
-        // 防止 iframe 内误触发返回导致跳出页面
-        // 潜在副作用（仅特殊情况下）调试时希望在 iframe 内自由返回上层页面返回操作会被阻止
-        (function () {
-            if (window.top === window.self && !/Safari/i.test(navigator.userAgent)) return;
-
-            let blockPop = false;
-
-            // 注入一条虚拟历史记录
-            history.replaceState({ page: 'init' }, '', location.href);
-            history.pushState({ page: 'adblock' }, '', location.href);
-
-            // 拦截回退行为
-            window.addEventListener('popstate', function (e) {
-                if (blockPop) return;
-                blockPop = true;
-
-                // Safari 误触发时强制再 push 一次，保持不动
-                history.pushState({ page: 'adblock' }, '', location.href);
-                blockPop = false;
-            });
-
-            // 防止部分版本 Safari 调用 window.close() 导致退出
-            const noop = () => { };
-            try {
-                Object.defineProperty(window, 'close', { value: noop, writable: false });
-            } catch (e) {
-                window.close = noop;
-            }
-        })();
-
-        this._eventAdsLast = {};
-        this.ready = new Promise((resolve) => { this._readyResolve = resolve; });
-
-        const _sdk = this;
         this._eventAds = {
             listeners: {
                 'ready': [],
@@ -61,49 +26,31 @@ class adSdk {
                 'afterAd': [],
                 'adDismissed': [],
                 'adViewed': [],
-                'ad_error': [],
+                'error': [],
                 'interstitial': [],
                 'reward': [],
-                'game_score': [],
-                'game_level': [],
-                'level_start': [],
-                'level_end': []
             },
             on(eventName, callback) {
-                if (!this.listeners[eventName]) return;
-                if (typeof callback !== 'function') return;
-                this.listeners[eventName].push(callback);
+                if (!this.listeners[eventName]) {
 
-                // only replay 'ready' to late subscribers (async to avoid reentrancy)
-                try {
-                    if (eventName === 'ready') {
-                        const last = _sdk._eventAdsLast['ready'];
-                        if (last) {
-                            setTimeout(() => {
-                                try { callback(...last); } catch (e) { console.warn('[adsdk] replay callback error', e && e.message); }
-                            }, 0);
-                        }
-                    }
-                } catch (e) { /* ignore replay errors */ }
+                    return;
+                }
+                this.listeners[eventName].push(callback);
             },
             emit(eventName, ...args) {
-                // record last args for 'ready' only
-                try { if (eventName === 'ready') _sdk._eventAdsLast['ready'] = args; } catch (e) { /* ignore */ }
+                if (!this.listeners[eventName]) {
 
-                // resolve ready promise once
-                if (eventName === 'ready' && _sdk._readyResolve) {
-                    try { _sdk._readyResolve(...args); } catch (_) { }
-                    _sdk._readyResolve = null;
+                    return;
                 }
-
-                if (!this.listeners[eventName]) return;
                 this.listeners[eventName].forEach(callback => {
-                    try { callback(...args); } catch (e) { console.warn('[adsdk] event callback error', e && e.message); }
+                    callback(...args);
                 });
             },
             off(eventName, callback) {
-                if (!this.listeners[eventName]) return;
-                if (!callback) { this.listeners[eventName] = []; return; }
+                if (!this.listeners[eventName]) {
+
+                    return;
+                }
                 this.listeners[eventName] = this.listeners[eventName].filter(cb => cb !== callback);
             }
         }
@@ -111,20 +58,13 @@ class adSdk {
         this.is_adsense = null;//是否adsense广告
         this.is_gpt = false; // 是否gpt广告
         this.is_ima = false; // 是否adx广告
-        this.is_android = false; // 是否android广告
-
         this.ads_code = null; // adsense广告代码
         this.gpt_code = null; // gpt广告代码
         this.ima_code = null; // adx广告代码
-        this.android_code = null; // android广告代码
-
-        // cpssdk adType
-        this._adType = null;
+        this.adType = null;
         this.adx_type = null; // adx广告类型
         this.gpt_type = null; // gpt广告类型
         this.adsense_type = null; // adsense广告类型
-        this.android_type = null; // android广告类型
-
         this.is_first = true;
         this.interstitial_requests_count = 0; // 插页广告请求次数
         this.interstitial_req_frequency = false; // 插页广告请求频率
@@ -139,10 +79,6 @@ class adSdk {
         this.interstitialAd = this._showInterstitialAd;
         this.rewardAd = this._showRewardAd;
 
-        // androidAd
-        this.appads_on = false; // 默认关闭，待父页开启后切换到 ANDROID
-        this.appads_pushtime = 3;
-        this._adsInitialized = false; // 防重复初始化（Android 或 Web 任一生效后置 true）
         // adx
         this.adContainer = null;
         this.videoContent = null;
@@ -154,6 +90,7 @@ class adSdk {
         this.adsRequest = null;
         this.adx_isLoaded = false;
         this.adxLoadTimeout = null; // ADX广告加载超时计时器
+
 
         this.adx_callback = {
             error: () => { },
@@ -177,246 +114,35 @@ class adSdk {
             adViewed: () => { },
             adDismissed: () => { }
         };
-        this.android_callback = {
-            error: () => { },
-            beforeAd: () => { },
-            afterAd: () => { },
-            adViewed: () => { },
-            adDismissed: () => { }
-        };
-
-        // 消息队列系统
-        this.adsdklayer = [];
-        this._messageCheckInterval = null;
-        this._gameTime = 0;
-        // reentrancy guard for sending messages
-        this._sendingMessages = false;
-        // 最大30秒发一次 - must set before calling the pushtime setter
-        this._maxPushTime = 30; // 最大30秒发一次
-        // 默认推送间隔（秒） - assign internal backing field directly to avoid running setter during construction
-        this._pushtime = 3; // 默认3秒发一次
-
-        // 监听来自父页面的事件
-        // 用于处理Android广告状态查询的回调
-        this._appeventCallback = (messageArray) => {
-            // 过滤 callback-only 并严格规范化输入为数组形式的消息
-            // 支持入参为 JSON 字符串、单一对象或数组。最终只处理 [{type, value}, ...] 格式
-            let parsed = null;
-            try {
-                if (typeof messageArray === 'string') {
-                    parsed = JSON.parse(messageArray);
-                } else {
-                    parsed = messageArray;
-                }
-            } catch (e) {
-                // 无法解析则直接忽略
-                console.warn('[adsdk] _appeventCallback: 无法解析回调数据', e && e.message);
-                return;
-            }
-
-            // 强制只接收数组
-            if (!Array.isArray(parsed)) {
-                // 如果是单个对象则封装为数组，否则忽略
-                if (parsed && typeof parsed === 'object' && parsed.type) {
-                    parsed = [parsed];
-                } else {
-                    return;
-                }
-            }
-
-            // 规范化每一项为 { type, value }，忽略不合规项
-            const normalized = [];
-            for (const item of parsed) {
-                try {
-                    if (!item || typeof item !== 'object') continue;
-                    const type = item.type || item.event_type || null;
-                    if (!type) continue;
-                    const value = (item.value !== undefined) ? item.value : (item.data !== undefined ? item.data : null);
-                    normalized.push({ type, value });
-                } catch (e) {
-                    // 单条解析错误则跳过该条
-                    continue;
-                }
-            }
-
-            // 记录日志并分发
-            normalized.forEach(message => {
-                let self = this;
-                self.__sdklog3('[GameStatus] 收到', message.type);
-
-
-                if (message.type === 'app_ads_on' && message["value"]) {
-
-                    self._ajax("https://www.cpsense.com/public/item/sdk?id=" + self.pubid, "GET", "").then(A => {
-
-                        if (A && A.code === 1 && Array.isArray(A.data)) {
-                            const appName = message["value"]["app_name"];
-                            if (typeof appName === 'string' && appName.length > 0) {
-                                // 遍历 data 中的每一项，检查 sdkId 是否包含 app_name
-                                const match = A.data.some(item => {
-                                    try {
-                                        return item && typeof item.sdkId === 'string' && item.sdkId.indexOf(appName) !== -1;
-                                    } catch (e) {
-                                        return false;
-                                    }
-                                });
-                                if (match) {
-                                    self.appads_on = true;
-                                    self._openAndroid();
-                                } else {
-                                    console.error('[adsdk] app_ads_on: 未在返回的 sdkId 列表中找到', appName);
-                                    self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on: 未在返回的 sdkId 列表中找到' + appName);
-                                }
-                            } else {
-                                console.error('[adsdk] app_ads_on 缺少或非法的 app_name 字段，忽略');
-                                self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on 缺少或非法的 app_name 字段，忽略');
-                            }
-                        } else {
-                            console.error('[adsdk] app_ads_on 返回数据异常，忽略');
-                            self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on 返回数据异常，忽略');
-                        }
-                    }).catch(error => {
-                        console.error("Error fetching API:", error);
-                        self._eventAds.emit('ad_error', "error", '[adsdk] app_ads_on请求接口失败' + error);
-                    });
-                }
-
-                if (message.type === "set_pushtime" && typeof message.value === "number") {
-                    self.updatePushInterval(message.value);
-                }
-
-                // 如果android广告功能未开启则不处理后续广告消息
-                if (!self.appads_on) return;
-
-                if (message.type === 'click_ad' && message["value"]) {
-                    console.log('收到 click_ad 事件', message.value);
-                    window.gtag('event', 'click_ad', { send: 'sdk', 'AdType': message.value });
-                }
-
-                try {
-                    switch (message.type) {
-
-                        case 'beforeAd':
-                            self.req_ad_timeout = false;
-                            try { if (self.android_callback && typeof self.android_callback.beforeAd === 'function') self.android_callback.beforeAd(); } catch (_) { }
-                            self._eventAds.emit('beforeAd', message.value, 'beforeAd');
-                            break;
-                        // case 'afterAd':
-                        //     try { if (self.android_callback && typeof self.android_callback.afterAd === 'function') self.android_callback.afterAd(); } catch (_) { }
-                        //     self._eventAds.emit('afterAd', self.android_type, 'afterAd');
-                        //     break;
-                        case 'adViewed':
-                            self.req_ad_timeout = false;
-                            if (message.value === "reward") {
-                                try { if (self.android_callback && typeof self.android_callback.adViewed === 'function') self.android_callback.adViewed(); } catch (_) { }
-                                self._eventAds.emit('adViewed', message.value, 'adViewed');
-                            } else {
-                                try { if (self.android_callback && typeof self.android_callback.afterAd === 'function') self.android_callback.afterAd(); } catch (_) { }
-                                self._eventAds.emit('afterAd', message.value, 'afterAd');
-                            }
-                            break;
-                        case 'adDismissed':
-                            self.req_ad_timeout = false;
-                            try { if (self.android_callback && typeof self.android_callback.adDismissed === 'function') self.android_callback.adDismissed(); } catch (_) { }
-                            self._eventAds.emit('adDismissed', message.value, 'adDismissed');
-                            break;
-                        case 'ad_error':
-                            self.req_ad_timeout = false;
-                            try { if (self.android_callback && typeof self.android_callback.error === 'function') self.android_callback.error(); } catch (_) { }
-                            self._eventAds.emit('ad_error', self.android_type, message.value);
-                            break;
-                        default:
-                        // this._eventAds.emit(message.type, message.value);
-                    }
-                } catch (error) {
-                    console.warn('[GameStatus] 处理消息失败:', message, error);
-                }
-            });
-
-            // 上层已确认（父页面或原生回调触达）后再启动消息轮询，避免在未就绪时立即开始定时发送
-        };
 
 
 
 
-        // 监听来自父页面的消息
-
-        window.addEventListener('message', (event) => {
-            try { this._appeventCallback(event.data) } catch (e) { console.log('message event err', e) }
-        });
-
-
-        // 原生回调处理
-        window.CpsenseAppEventCallBack = (event) => {
-            if (this.isFramed) { return; }
-            if (this.isAndroid) {
-                try { this._appeventCallback(event) } catch (e) { console.log('message event err', e) }
-
-            }
-        };
-
-
-        this.adsType = { ADSENSE: 'adsense', IMA: 'ima', GPT: 'gpt', ANDROID: 'androidAds' }; // 广告类型
-
-        Object.defineProperty(this, 'adType', {
-            configurable: true,
-            enumerable: true,
-            get: function () { return this._adType; },
-            set: function (val) {
-                const old = this._adType;
-                if (old === val) return;
-                this._adType = val;
-            }
-        });
+        this.adsType = { ADSENSE: 'adsense', IMA: 'ima', GPT: 'gpt' }; // 广告类型
 
         // ads事件流程 
         this._eventAds.on('ready', (param1, param2) => {
             this.__sdklog(param1, param2);
         })
 
-
-
         this._eventAds.on('interstitial', (param1) => {
             window.gtag('event', 'game_interstitialad', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog(param1, this.adType);
-
-            if (this.appads_on) {
-                this.adsdklayer.push({
-                    type: 'interstitial',
-                    value: 1
-                })
-                this.checkAndSendMessages();
-            }
         })
 
         this._eventAds.on('reward', (param1) => {
             window.gtag('event', 'game_reward', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog(param1, this.adType);
-
-            if (this.appads_on) {
-                this.adsdklayer.push({
-                    type: 'reward',
-                    value: 1
-                })
-                this.checkAndSendMessages();
-            }
         })
 
         this._eventAds.on('beforeAd', (param1, param2) => {
 
-            if (this.adx_type === "rewardedAd" || this.gpt_type === "rewardedAd" || param1 === "rewardedAd" || this.android_type === "rewardedAd") {
+            if (this.adx_type === "rewardedAd" || this.gpt_type === "rewardedAd" || param1 === "rewardedAd") {
                 window.gtag('event', 'game_reward_open', { send: 'sdk', 'ad_type': this.adType });
-                // this.adsdklayer.push({
-                //     type: 'reward_open',
-                //     value: 1
-                // })
+
             } else {
 
                 window.gtag('event', 'game_interstitialad_open', { send: 'sdk', 'ad_type': this.adType });
-                // this.adsdklayer.push({
-                //     type: 'interstitial_open',
-                //     value: 1
-                // })
             }
             this.__sdklog2("*******adevent**********", param1, param2, this.adType);
         })
@@ -424,31 +150,19 @@ class adSdk {
         this._eventAds.on('adDismissed', (param1) => {
             window.gtag('event', 'game_reward_dismissed', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog2("*******adevent**********", param1, this.adType);
-            this.adsdklayer.push({
-                type: 'reward_dismissed',
-                value: 1
-            })
         })
 
         this._eventAds.on('adViewed', (param1) => {
             window.gtag('event', 'game_reward_viewed', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog2("*******adevent**********", param1, this.adType);
-            this.adsdklayer.push({
-                type: 'reward_viewed',
-                value: 1
-            })
         })
 
         this._eventAds.on('afterAd', (param1, param2) => {
             window.gtag('event', 'game_interstitialad_viewed', { send: 'sdk', 'ad_type': this.adType });
             this.__sdklog2("*******adevent**********", param1, param2, this.adType);
-            this.adsdklayer.push({
-                type: 'interstitial_viewed',
-                value: 1
-            })
         })
 
-        this._eventAds.on('ad_error', (param1, param2) => {
+        this._eventAds.on('error', (param1, param2) => {
 
             switch (param2) {
                 case 'timeout':
@@ -461,20 +175,12 @@ class adSdk {
                 case 'frequencyinterstitialAd':
                 case 'other':
                     window.gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
-                    this.adsdklayer.push({
-                        type: 'ad_error',
-                        value: param2
-                    })
                     break;
                 case 'viewed':
                 case 'dismissed':
                     break;
                 default:
                     window.gtag('event', 'ad_error', { 'ad_error_type': param2, send: 'sdk', 'ad_type': this.adType });
-                    this.adsdklayer.push({
-                        type: 'ad_error',
-                        value: param2
-                    })
                     break;
             }
             if (param2 !== 'viewed' && param2 !== 'dismissed') {
@@ -483,34 +189,10 @@ class adSdk {
             }
         })
 
-        this._eventAds.on('game_score', (data) => {
-            this.__sdklog3("game_score", data)
-            this.adsdklayer.push({
-                type: 'game_score',
-                value: data.score
-            });
-
-        })
-
-        this._eventAds.on('game_level', (data) => {
-            this.__sdklog3("game_level", data)
-            this.adsdklayer.push({
-                type: 'game_level',
-                value: data.level
-            });
-        })
-
-        // 汇总游戏状态
-        this._eventAds.on('level_end', (data) => {
-            this.__sdklog3("level_end", data)
-            this.adsdklayer.push({
-                type: 'level_end',
-                value: data
-            })
-        })
-
         try {
+
             const self = this;
+
 
             const AD_IFRAME_DOMAINS = ['googlesyndication.com', 'doubleclick.net'];
             let lastCheckTime = 0;
@@ -543,9 +225,6 @@ class adSdk {
                 self.__sdklog2("##########捕获到iframe点击##########");
                 window.gtag('event', 'click_ad', { send: 'sdk' });
 
-
-
-
             }
 
             function checkAdClick() {
@@ -571,15 +250,8 @@ class adSdk {
             self.__sdklog3("ad跳出监听器失败:", e.message);
         }
 
-        // 启用GA
-        this._insert_tagmanager();
-
         this._initAds();
 
-        if (this.isAndroid || this.isFramed) {
-            this.__sdklog('[adsdk] 上层已确认，启动消息轮询');
-            this.startMessageCheck();
-        }
         // 初始化排名
         function loadScript(src) {
             return new Promise((resolve, reject) => {
@@ -616,86 +288,49 @@ class adSdk {
             });
     }
 
-    get pushtime() {
-        return this._pushtime;
-    }
 
-    set pushtime(value) {
-        const v = Math.max(1, Math.min(Number(value) || 1, this._maxPushTime));
-        const oldTime = this._pushtime;
-        if (v !== oldTime) {
-            this._pushtime = v;
-            this.__sdklog('[adsdk] 推送间隔已更新:', this._pushtime, '秒');
-            this.updatePushInterval();
-        }
-    }
 
     // 判断广告类型ad_type,根据pubid和dev来获取广告代码
     _initAds() {
 
-        // 默认启用网页广告初始化
-        this._openWebAds();
-
-        // Android 广告能力探测：向父页/原生发送统一上行事件
-        if (this.isAndroid || this.isFramed) {
-            // 不使用用超时回退,直接等待下行通知进行切换
-            this.adsdklayer.push({ type: 'app_ads_event', value: 'is_ads_native' });
-            console.log('发送上层广告能力探测事件');
-            this.checkAndSendMessages();
-        }
-    }
-
-    _timeoutTimer_load = null;
-
-    _openAndroid() {
-        this.adType = this.adsType.ANDROID;
-        this.is_android = true;
-        this.adSdk_isReady = true;
-        this._adsInitialized = true;
-        try { this._eventAds.emit('ready', "adSdk_isReady:true", "android"); } catch (_) { }
-        this.__sdklog('[adsdk] 启用Android广告，不执行网页广告初始化');
-    }
-
-    // 网页广告初始化调度
-    _openWebAds() {
-        if (this._adsInitialized) return; // 已有任意广告栈初始化，避免重复
         // type_1: adsense
         // type_2: adx
         // type_3: gpt
-        // type_4: androidAds
+
         let code = ads_list[this.pubid + '-' + this.dev_name] || ads_list[this.dev_name] || ads_list['default_ads'];
-        if (!code) return;
 
-        if (code.startsWith('data-ad-client')) {
-            this.adType = this.adsType.ADSENSE;
-            this.is_adsense = true;
-            this.ads_code = code; // adsense广告代码
-            this._adsInitialized = true;
-            this._openAdsense();
-            return;
+        if (code) {
+
+            if (code.startsWith('data-ad-client')) {
+                this.adType = this.adsType.ADSENSE;
+                this.is_adsense = true;
+                this.ads_code = code; // adsense广告代码
+                this._openAdsense();
+                return;
+            }
+
+            if (code.startsWith('https://pubads.g.doubleclick.net/gampad/ads?iu=')) {
+                this.adType = this.adsType.IMA;
+                this.is_gpt = true; // adx
+                this.ima_code = code; // adx广告代码
+                this._openIma();
+                return;
+            }
+
+            if (/^\/\d[^\/]*\//.test(code)) {
+                this.adType = this.adsType.GPT;
+                this.gpt_code = code;
+                this._openGPT();
+                return;
+            }
+
+            this._openIma(vast_url);
+
         }
 
-        if (code.startsWith('https://pubads.g.doubleclick.net/gampad/ads?iu=')) {
-            this.adType = this.adsType.IMA;
-            this.is_ima = true; 
-            this.ima_code = code; 
-            this._adsInitialized = true;
-            this._openIma();
-            return;
-        }
-
-        if (/^\/\d[^\/]*\//.test(code)) {
-            this.adType = this.adsType.GPT;
-            this.gpt_code = code;
-            this._adsInitialized = true;
-            this._openGPT();
-            return;
-        }
-
-        // 默认回退到 IMA VAST
-        this._adsInitialized = true;
-        this._openIma(vast_url);
     }
+
+    _timeoutTimer_load = null;
 
     _openAdsense() {
 
@@ -727,16 +362,21 @@ class adSdk {
                 onReady: () => {
                     isTimeOut = true;
                     this.adSdk_isReady = true;
-
+                    this._eventAds.emit('ready', "adSdk_isReady:true", "s");
                 }
             });
-            this._eventAds.emit('ready', "adSdk_isReady:true", "s");
 
+            this._timeoutTimer_load = setTimeout(() => {
+                clearTimeout(this._timeoutTimer_load);
+                if (!isTimeOut) {
+                    this._eventAds.emit('error', "timeout", "notReady-adsense");
+                }
+            }, 10000);
         }
 
         adsense_Script.onerror = (error) => {
 
-            this._eventAds.emit('ad_error', "error", "not-loaded-adsense");
+            this._eventAds.emit('error', "error", "not-loaded-adsense");
             this.__sdklog("adsense loadError:", error);
         }
 
@@ -761,7 +401,7 @@ class adSdk {
         }
 
         adx_script.onerror = () => {
-            this._eventAds.emit('ad_error', "error", "not-loaded-adx");
+            this._eventAds.emit('error', "error", "not-loaded-adx");
             this.__sdklog("adx load error");
         }
     }
@@ -846,10 +486,6 @@ class adSdk {
                         // console.log("ad close");
                         window.googletag.destroySlots([self.rewardedSlot]);
                         self.rewardedSlot = null;
-                    } else {
-                        if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
-                            self.gpt_callback.error();
-                        }
                     }
                 });
 
@@ -875,7 +511,7 @@ class adSdk {
                             if (event.isEmpty) {
 
                                 self.req_ad_timeout = false; // 重置超时标志
-                                self._eventAds.emit('ad_error', 'error', "No ad returned for rewarded ad slot.");
+                                self._eventAds.emit('error', 'error', "No ad returned for rewarded ad slot.");
                                 if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
                                     self.gpt_callback.error("No ad returned for rewarded ad slot.");
                                 }
@@ -885,17 +521,15 @@ class adSdk {
                         console.log('event.isEmpty err', e);
                     }
                 });
-                googletag.pubads().setTargeting("game_id", self.gameid);
 
                 window.googletag.enableServices();
-
 
             });
 
         }
 
         gpt_script.onerror = () => {
-            this._eventAds.emit('ad_error', "error", "not-loaded-gpt");
+            this._eventAds.emit('error', "error", "not-loaded-gpt");
             this.__sdklog("gpt load error");
         }
     }
@@ -984,7 +618,7 @@ class adSdk {
         } catch (e) {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             self._destroyAdxDom(); // 清理广告容器
-            self._eventAds.emit('ad_error', 'error', 'notReady');
+            self._eventAds.emit('error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
             }
@@ -1001,7 +635,7 @@ class adSdk {
         } catch (e) {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             self._destroyAdxDom(); // 清理广告容器
-            self._eventAds.emit('ad_error', 'error', 'notReady');
+            self._eventAds.emit('error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
             }
@@ -1115,7 +749,7 @@ class adSdk {
                     console.log('adx IMA err:', e);
                 }
 
-                self._eventAds.emit('ad_error', errorType, errorMessage);
+                self._eventAds.emit('error', errorType, errorMessage);
                 if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                     self.adx_callback.error(errorType);
                 }
@@ -1154,7 +788,7 @@ class adSdk {
             console.log('adx IMA err:', e);
         }
 
-        this._eventAds.emit('ad_error', errorType, errorMessage);
+        this._eventAds.emit('error', errorType, errorMessage);
         if (this.adx_callback && typeof this.adx_callback.error === 'function') {
             this.adx_callback.error(errorType);
         }
@@ -1168,7 +802,7 @@ class adSdk {
         // 检查Google IMA SDK是否加载成功
         if (typeof google === 'undefined' || typeof google.ima === 'undefined') {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
-            self._eventAds.emit('ad_error', 'error', 'notReady');
+            self._eventAds.emit('error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
             }
@@ -1197,7 +831,7 @@ class adSdk {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             self._destroyAdxDom(); // 清理广告容器
 
-            self._eventAds.emit('ad_error', 'error', 'notReady');
+            self._eventAds.emit('error', 'error', 'notReady');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('notReady');
             }
@@ -1210,7 +844,7 @@ class adSdk {
                 console.log('ADX ad loading timeout, destroying container');
                 self.req_ad_timeout = false;
                 self._destroyAdxDom(); // 清理广告容器
-                self._eventAds.emit('ad_error', 'error', 'timeout');
+                self._eventAds.emit('error', 'error', 'timeout');
                 if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                     self.adx_callback.error('timeout');
                 }
@@ -1252,7 +886,7 @@ class adSdk {
                 clearTimeout(self.adxLoadTimeout);
                 self.adxLoadTimeout = null;
             }
-            self._eventAds.emit('ad_error', 'error', 'initError');
+            self._eventAds.emit('error', 'error', 'initError');
             if (self.adx_callback && typeof self.adx_callback.error === 'function') {
                 self.adx_callback.error('initError');
             }
@@ -1260,6 +894,7 @@ class adSdk {
     }
 
     gptBackupTimeout = null; // GPT备用超时
+
     _showGPT() {
 
         let self = this;
@@ -1267,7 +902,7 @@ class adSdk {
         // 检查Google Publisher Tag SDK是否加载成功
         if (typeof window.googletag === 'undefined' || !window.googletag.cmd) {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
-            self._eventAds.emit('ad_error', 'error', 'notReady');
+            self._eventAds.emit('error', 'error', 'notReady');
             if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
                 self.gpt_callback.error('notReady');
             }
@@ -1278,13 +913,15 @@ class adSdk {
 
         // 设置一个备用超时，如果30秒内没有任何GPT事件响应，直接报错
         self.gptBackupTimeout = setTimeout(() => {
+            if (self.req_ad_timeout) {
 
-            self._eventAds.emit('ad_error', 'error', 'gpt_no_response');
-            if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
-                self.gpt_callback.error('gpt_no_response');
+                self.req_ad_timeout = false;
+                self._eventAds.emit('error', 'error', 'gpt_no_response');
+                if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
+                    self.gpt_callback.error('gpt_no_response');
+                }
             }
-
-        }, 8000);
+        }, 30000);
 
         window.googletag.cmd.push(() => {
             // 创建新的广告位
@@ -1296,7 +933,7 @@ class adSdk {
             if (self.rewardedSlot) {
                 self.rewardedSlot.addService(window.googletag.pubads());
                 window.googletag.display(self.rewardedSlot);
-                self.req_ad_timeout = false;
+
             } else {
 
                 if (self.gptBackupTimeout) {
@@ -1304,7 +941,7 @@ class adSdk {
                     self.gptBackupTimeout = null;
                 }
                 self.req_ad_timeout = false;
-                self._eventAds.emit('ad_error', 'error', 'create_slot_failed');
+                self._eventAds.emit('error', 'error', 'create_slot_failed');
                 if (self.gpt_callback && typeof self.gpt_callback.error === 'function') {
                     self.gpt_callback.error('create_slot_failed');
                 }
@@ -1320,7 +957,7 @@ class adSdk {
         if (typeof window.adBreak !== 'function') {
             self.req_ad_timeout = false; // 重置超时标志，防止后续timeout
             if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error("notReady-adsense");
-            self._eventAds.emit('ad_error', "error", "notReady-adsense");
+            self._eventAds.emit('error', "error", "notReady-adsense");
             return;
         }
         if (self.adsense_type === 'rewardedAd') {
@@ -1348,7 +985,7 @@ class adSdk {
 
                     self.req_ad_timeout = false;
                     let breakStatus = placement_info && placement_info.breakStatus ? placement_info.breakStatus : 'unknown';
-                    self._eventAds.emit('ad_error', "reward_error", breakStatus);
+                    self._eventAds.emit('error', "reward_error", breakStatus);
                     if (breakStatus !== 'viewed') {
                         if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
                     }
@@ -1370,7 +1007,7 @@ class adSdk {
                         self.req_ad_timeout = false;
                         // console.log('adBreakDone', placement_info);
                         let breakStatus = placement_info && placement_info.breakStatus ? placement_info.breakStatus : 'unknown';
-                        self._eventAds.emit('ad_error', "interstitial_error", breakStatus);
+                        self._eventAds.emit('error', "interstitial_error", breakStatus);
 
                         if (breakStatus !== 'viewed') {
                             if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
@@ -1402,7 +1039,7 @@ class adSdk {
                         self.req_ad_timeout = false;
                         // console.log('adBreakDone', placement_info);
                         let breakStatus = placement_info && placement_info.breakStatus ? placement_info.breakStatus : 'unknown';
-                        self._eventAds.emit('ad_error', "interstitial_error", breakStatus);
+                        self._eventAds.emit('error', "interstitial_error", breakStatus);
 
                         if (breakStatus !== 'viewed') {
                             if (typeof self.adsense_callback.error === 'function') self.adsense_callback.error(breakStatus);
@@ -1426,7 +1063,7 @@ class adSdk {
         // 检查SDK是否准备就绪,目前adsense不需要检查
         // if (!self.adSdk_isReady) {
         //     if (typeof callback.error === 'function') callback.error("notReady");
-        //     self._eventAds.emit('ad_error', "error", "notReady");
+        //     self._eventAds.emit('error', "error", "notReady");
         //     return;
         // }
 
@@ -1444,13 +1081,11 @@ class adSdk {
 
         self._eventAds.emit('interstitial', "interstitialAd");
 
-
-
         self._timeoutTimer = setTimeout(() => {
             clearTimeout(self._timeoutTimer);
             if (self.req_ad_timeout) {
                 self.is_first = false;
-                self._eventAds.emit('ad_error', "error", "timeout");
+                self._eventAds.emit('error', "error", "timeout");
                 if (typeof callback.error === 'function') callback.error("timeout");
             }
         }, 8000);
@@ -1471,7 +1106,7 @@ class adSdk {
                 self.interstitial_time_start = now;
             } else {
                 if (typeof callback.error === 'function') callback.error({ ad_error_type: 'frequencyinterstitialAd' });
-                self._eventAds.emit('ad_error', "frequencyinterstitialAd", 'frequencyinterstitialAd');
+                self._eventAds.emit('error', "frequencyinterstitialAd", 'frequencyinterstitialAd');
                 return false;
             }
         }
@@ -1503,9 +1138,11 @@ class adSdk {
                 adViewed: (callback && callback.adViewed) || (() => { }),
                 adDismissed: (callback && callback.adDismissed) || (() => { })
             });
+
             self._showAdx();
-        }
-        else if (self.adType === self.adsType.GPT) {
+
+
+        } else if (self.adType === self.adsType.GPT) {
             self.gpt_type = 'interstitialAd';
             // 安全地合并回调对象，保留默认的空函数
             Object.assign(self.gpt_callback, {
@@ -1516,18 +1153,6 @@ class adSdk {
                 adDismissed: (callback && callback.adDismissed) || (() => { })
             });
             self._showGPT();
-        }
-        else if (self.adType === self.adsType.ANDROID) {
-            // ANDROID：设定类型并改用原生调用，避免重复定时器
-            self.android_type = 'interstitialAd';
-            Object.assign(self.android_callback, {
-                error: (callback && callback.error) || (() => { }),
-                beforeAd: (callback && callback.beforeAd) || (() => { }),
-                afterAd: (callback && callback.afterAd) || (() => { }),
-                adViewed: (callback && callback.adViewed) || (() => { }),
-                adDismissed: (callback && callback.adDismissed) || (() => { })
-            });
-            // 通过事件触发调用安卓原生广告
         }
 
 
@@ -1542,7 +1167,7 @@ class adSdk {
         // 检查SDK是否准备就绪
         // if (!self.adSdk_isReady) {
         //     if (typeof callback.error === 'function') callback.error("notReady");
-        //     self._eventAds.emit('ad_error', "error", "notReady");
+        //     self._eventAds.emit('error', "error", "notReady");
         //     return;
         // }
 
@@ -1563,7 +1188,7 @@ class adSdk {
         self._timeoutTimer_reward = setTimeout(() => {
             clearTimeout(self._timeoutTimer_reward);
             if (self.req_ad_timeout) {
-                self._eventAds.emit('ad_error', "error", "timeout");
+                self._eventAds.emit('error', "error", "timeout");
                 if (typeof callback.error === 'function') callback.error("timeout");
             }
         }, 8000);
@@ -1584,7 +1209,7 @@ class adSdk {
         // 检查是否超过3次限制
         if (self.reward_requests_count <= 0) {
             if (typeof callback.error === 'function') callback.error({ ad_error_type: 'frequencyrewardAd' });
-            self._eventAds.emit('ad_error', "frequencyrewardAd", 'frequencyrewardAd');
+            self._eventAds.emit('error', "frequencyrewardAd", 'frequencyrewardAd');
             return false;
         }
 
@@ -1630,119 +1255,12 @@ class adSdk {
                 adDismissed: (callback && callback.adDismissed) || (() => { })
             });
             self._showGPT();
-        } else if (this.adType === this.adsType.ANDROID) {
-            // ANDROID：设定类型并改用原生调用，避免重复定时器
-            this.android_type = 'rewardedAd';
-            Object.assign(this.android_callback, {
-                error: (callback && callback.error) || (() => { }),
-                beforeAd: (callback && callback.beforeAd) || (() => { }),
-                afterAd: (callback && callback.afterAd) || (() => { }),
-                adViewed: (callback && callback.adViewed) || (() => { }),
-                adDismissed: (callback && callback.adDismissed) || (() => { })
-            });
-
         }
 
 
     }
 
-    /// postmessage ///
 
-
-    /**
-     * 启动消息队列检查
-     * 根据pushtime配置的间隔检查adsdklayer是否有数据，如果有就发送
-     */
-    startMessageCheck() {
-        if (this._messageCheckInterval) {
-            clearInterval(this._messageCheckInterval);
-        }
-
-        this._messageCheckInterval = setInterval(() => {
-            this.checkAndSendMessages();
-        }, this.getPushInterval());
-
-        this.__sdklog('[adsdk] 消息队列检查已启动，间隔:', this.getPushInterval() / 1000, '秒');
-    }
-
-    /**
-     * 获取推送间隔（毫秒）
-     * 限制在1秒到30秒之间
-     */
-    getPushInterval() {
-        let interval = Math.max(1, Math.min(this.pushtime, this._maxPushTime));
-        return interval * 1000;
-    }
-
-    updatePushInterval() {
-        if (this._messageCheckInterval) {
-            this.startMessageCheck(); // 重新启动定时器
-        }
-    }
-
-
-    checkAndSendMessages() {
-        let self = this;
-
-        if (!self.isFramed && !self.isAndroid) return;
-
-        if (!self.adsdklayer || self.adsdklayer.length === 0) return;
-
-        const pending = self.adsdklayer.slice();
-
-        self.adsdklayer = [];
-
-        const parentPayload = self.deduplicateMessages(pending);
-        const nativePayload = pending;
-
-        try {
-            if (self.isFramed) {
-                const parentString = JSON.stringify(parentPayload);
-                try {
-                    window.parent.postMessage(parentString, '*');
-                } catch (errPost) {
-                    console.warn('[adsdk] parent.postMessage failed:', errPost);
-                }
-            }
-
-            if (!self.isFramed && self.isAndroid) {
-                try {
-                    window.CpsenseAppEvent.events(JSON.stringify(nativePayload));
-                    self.__sdklog('[adsdk] CpsenseAppEvent.events called with', JSON.stringify(nativePayload));
-                } catch (nativeErr) {
-                    console.warn('[adsdk] native push failed:', nativeErr);
-                }
-            }
-        } catch (sendErr) {
-            console.warn('[adsdk] send error:', sendErr);
-        }
-
-
-    }
-
-    deduplicateMessages(messages) {
-        const messageMap = new Map();
-
-        // 遍历消息，相同type的后面覆盖前面的
-        messages.forEach(message => {
-            messageMap.set(message.type, message);
-        });
-
-        return Array.from(messageMap.values());
-    }
-
-
-    /**
-     * 设置推送间隔（秒）
-     * @param {number} seconds - 推送间隔，1-30秒之间
-     */
-    setPushTime(seconds) {
-        this.pushtime = seconds;
-    }
-
-    getPushTime() {
-        return this.pushtime;
-    }
 
     __sdklog(...args) {
         const formatParam = (arg) => {
@@ -1754,7 +1272,7 @@ class adSdk {
         const params = args.map(formatParam).join(' ');
 
         console.log(
-            `%c ***CPSDK***: ${params}`,
+            `%c ***prsdk***: ${params}`,
 
             'background-color: #f9f9f9; ' +
             'border: 2px solid #8e44ad; ' +
@@ -1776,7 +1294,7 @@ class adSdk {
         const params = args.map(formatParam).join(' ');
 
         console.log(
-            `%c ***CPSDK***: ${params}`,
+            `%c ***prsdk***: ${params}`,
             'background: linear-gradient(to right, #8e44ad, #ba43ff); ' +
             'color: white; ' +
             'padding: 5px 15px; ' +
@@ -1808,6 +1326,8 @@ class adSdk {
         );
     }
 
+
+
     // tag init
     _insert_tagmanager() {
         let self = this;
@@ -1829,8 +1349,7 @@ class adSdk {
             window.gtag('set', 'cookie_flags', 'SameSite=None;Secure');
             window.gtag('config', 'G-NL2943ZRFH', {
                 game_id: self.gameid,
-                dev_name: self.dev_name,//self.config.client
-                iframe_url: document.referrer
+                'dev_name': self.dev_name//self.config.client
             });
         };
 
@@ -1873,31 +1392,7 @@ class adSdk {
                     ar2['send'] &&
                     ar2['send'] === 'sdk')
             ) {
-                try {
-
-                    let copyThird;
-                    if (ar[2] && typeof ar[2] === 'object') {
-                        if (Array.isArray(ar[2])) {
-                            copyThird = ar[2].slice();
-                        } else {
-                            copyThird = Object.assign({}, ar[2]);
-                        }
-                    } else {
-                        copyThird = {};
-                    }
-
-                    try { delete copyThird.dev_name; } catch (_) { /* ignore */ }
-                    try { delete copyThird.iframe_url; } catch (_) { /* ignore */ }
-                    copyThird.game_id = self.gameid;
-
-                    const logArgs = Array.from(arguments);
-                    logArgs[2] = copyThird;
-
-                    self.__sdklog3(...logArgs);
-
-                } catch (e) { /* ignore */ }
-
-
+                self.__sdklog3(arguments)
                 try {
                     if (window.dataLayer && typeof window.dataLayer.push === 'function') {
                         window.dataLayer.push(arguments);
@@ -1913,34 +1408,7 @@ class adSdk {
                     if (typeof window.gtag === 'function') {
                         window.gtag('event', 'game_play_time', { send: 'sdk' });
                     }
-                    // message
-                    self.adsdklayer.push({
-                        type: 'game_time',
-                        value: self._gameTime += 30
-                    });
                 }, 30000);
-            }
-
-            // 添加上报分支
-            if (ar1 === 'game_start') {
-                self.adsdklayer.push({
-                    type: 'game_start',
-                    value: ar[2]
-                })
-            }
-
-            if (ar1 === 'level_start') {
-                self.adsdklayer.push({
-                    type: 'level_start',
-                    value: ar[2]
-                })
-            }
-
-            if (ar1 === 'level_end') {
-                self.adsdklayer.push({
-                    type: 'level_end',
-                    value: ar[2]
-                })
             }
 
 
@@ -1958,7 +1426,6 @@ class adSdk {
 
         return beta_url
     }
-
     _generateUniqueCorrelator() {
         return Date.now();
     }
@@ -2037,12 +1504,18 @@ const backup_beta_urls = {
 
 }
 
+
+
 const vast_url = 'https://pubads.g.doubleclick.net/gampad/ads?iu=/22149012983/h5-bwg-vast/400x300-1180marketjs-id00032-bwg&description_url=https%3A%2F%2Fwww.likebox.xyz&tfcd=0&npa=0&sz=400x300&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=';
 const ads_list = {
     "495-marketjs": "data-ad-client=ca-pub-2252168419307880",
     "495-behappy": "data-ad-client=ca-pub-2252168419307880",
     "495-91games": "data-ad-client=ca-pub-2252168419307880",
     "495-cpsense": "data-ad-client=ca-pub-2252168419307880",
+    "316-cpsense": "https://pubads.g.doubleclick.net/gampad/ads?iu=/22846978691/h5-bwg-vast/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "316-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/22846978691/h5-bwg-vast/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "316-91games": "https://pubads.g.doubleclick.net/gampad/ads?iu=/22846978691/h5-bwg-vast/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
+    "316-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/22846978691/h5-bwg-vast/400x300-4174cpsense-id00316-bwg&description_url=https%3A%2F%2Fwww.bestbox.top&tfcd=0&npa=0&sz=400x300%7C640x480&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=",
     "487-behappy": "data-ad-client=ca-pub-5985150674191762",
     "487-91games": "data-ad-client=ca-pub-5985150674191762",
     "487-marketjs": "data-ad-client=ca-pub-5985150674191762",
@@ -2143,17 +1616,25 @@ const ads_list = {
     "1323-91games": "data-ad-client=ca-pub-5985150674191762",
     "1323-cpsense": "data-ad-client=ca-pub-5985150674191762",
     "1323-cpsense-cd": "data-ad-client=ca-pub-5985150674191762",
+    "193-marketjs": "/91325758/h5-bwg-game/reward-game-ads",
+    "193-behappy": "/91325758/h5-bwg-game/reward-game-ads",
+    "193-91games": "/91325758/h5-bwg-game/reward-game-ads",
+    "193-cpsense": "/91325758/h5-bwg-game/reward-game-ads",
+    "193-cpsense-cd": "/91325758/h5-bwg-game/reward-game-ads",
     "3942-marketjs": "data-ad-client=ca-pub-4230754353315567",
     "3942-behappy": "data-ad-client=ca-pub-4230754353315567",
     "3942-91games": "data-ad-client=ca-pub-4230754353315567",
     "3942-cpsense": "data-ad-client=ca-pub-4230754353315567",
     "3942-cpsense-cd": "data-ad-client=ca-pub-4230754353315567",
+    "3917-marketjs": "0",
     "3553-marketjs": "data-ad-client=ca-pub-8934204454340791",
     "3553-behappy": "data-ad-client=ca-pub-8934204454340791",
     "3553-91games": "data-ad-client=ca-pub-8934204454340791",
     "3553-cpsense": "data-ad-client=ca-pub-8934204454340791",
     "3553-cpsense-cd": "data-ad-client=ca-pub-8934204454340791",
     "3884-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3884-91games": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3884-cpsense": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
     "3884-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
     "3884-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-play.6xfun.com/play.6xfun.com-reward-070801&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
     "4073-marketjs": "/68700844/nor0308/Incentive-01-nor0308",
@@ -2163,76 +1644,18 @@ const ads_list = {
     "4073-cpsense-cd": "/68700844/nor0308/Incentive-01-nor0308",
     "3887-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
     "3887-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3887-91games": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3887-cpsense": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
     "3887-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-game.6xfun.com/game.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
     "3890-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
     "3890-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-91games": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
+    "3890-cpsense": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
     "3890-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hi.6xfun.com/hi.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&vpos=preroll&output=vast&env=vp&impl=s&correlator=",
-    "3882-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-www.6xfun.com/www.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-    "3882-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-www.6xfun.com/www.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-    "3882-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-www.6xfun.com/www.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-    "3885-marketjs": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hot.6xfun.com/hot.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-    "3885-behappy": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hot.6xfun.com/hot.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-    "3885-cpsense-cd": "https://pubads.g.doubleclick.net/gampad/ads?iu=/23269691274/h5-hot.6xfun.com/hot.6xfun.com-reward-071401&description_url=http%3A%2F%2F6xfun.com&tfcd=0&npa=0&sz=300x250%7C400x300%7C640x480&gdfp_req=1&unviewed_position_start=1&output=vast&env=vp&impl=s&vpos=preroll&correlator=",
-    "4107-marketjs": "/68700844/nor3333/Incentive-01-nor3333",
-    "4107-behappy": "/68700844/nor3333/Incentive-01-nor3333",
-    "4107-91games": "/68700844/nor3333/Incentive-01-nor3333",
-    "4107-cpsense": "/68700844/nor3333/Incentive-01-nor3333",
-    "4107-cpsense-cd": "/68700844/nor3333/Incentive-01-nor3333",
-    "4006-marketjs": "data-ad-client=ca-pub-6201795131710027",
-    "4006-behappy": "data-ad-client=ca-pub-6201795131710027",
-    "4006-91games": "data-ad-client=ca-pub-6201795131710027",
-    "4006-cpsense": "data-ad-client=ca-pub-6201795131710027",
-    "4006-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-    "4049-marketjs": "data-ad-client=ca-pub-6201795131710027",
-    "4049-behappy": "data-ad-client=ca-pub-6201795131710027",
-    "4049-91games": "data-ad-client=ca-pub-6201795131710027",
-    "4049-cpsense": "data-ad-client=ca-pub-6201795131710027",
-    "4049-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-    "4007-marketjs": "data-ad-client=ca-pub-6201795131710027",
-    "4007-behappy": "data-ad-client=ca-pub-6201795131710027",
-    "4007-91games": "data-ad-client=ca-pub-6201795131710027",
-    "4007-cpsense": "data-ad-client=ca-pub-6201795131710027",
-    "4007-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-    "4008-marketjs": "data-ad-client=ca-pub-6201795131710027",
-    "4008-behappy": "data-ad-client=ca-pub-6201795131710027",
-    "4008-91games": "data-ad-client=ca-pub-6201795131710027",
-    "4008-cpsense": "data-ad-client=ca-pub-6201795131710027",
-    "4008-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-    "4094-marketjs": "data-ad-client=ca-pub-6201795131710027",
-    "4094-behappy": "data-ad-client=ca-pub-6201795131710027",
-    "4094-91games": "data-ad-client=ca-pub-6201795131710027",
-    "4094-cpsense": "data-ad-client=ca-pub-6201795131710027",
-    "4094-cpsense-cd": "data-ad-client=ca-pub-6201795131710027",
-    "4109-marketjs": "/23260759350/fine350/01-reward-fine350",
-    "4109-behappy": "/23260759350/fine350/01-reward-fine350",
-    "4109-91games": "/23260759350/fine350/01-reward-fine350",
-    "4109-cpsense": "/23260759350/fine350/01-reward-fine350",
-    "4109-cpsense-cd": "/23260759350/fine350/01-reward-fine350",
-    "311-marketjs": "data-ad-client=ca-pub-9261379780030863",
-    "311-behappy": "data-ad-client=ca-pub-9261379780030863",
-    "311-91games": "data-ad-client=ca-pub-9261379780030863",
-    "311-cpsense": "data-ad-client=ca-pub-9261379780030863",
-    "311-cpsense-cd": "data-ad-client=ca-pub-9261379780030863",
-    "3917-marketjs": "data-ad-client=ca-pub-4134851517660003",
-    "221-91games": "/23260026613/h5-game/h5-game-rewarded-91games",
-    "221-cpsense": "/23260026613/h5-game/h5-game-rewarded-cpsense",
-    "221-cpsense-cd": "/23260026613/h5-game/h5-game-rewarded-cpsense-cd",
-    "4300-91games": "data-ad-client=ca-pub-3126784834320338",
-    "4300-cpsense": "data-ad-client=ca-pub-3126784834320338",
-    "4300-cpsense-cd": "data-ad-client=ca-pub-3126784834320338",
-    "4300-behappy": "data-ad-client=ca-pub-3126784834320338",
-    "4348-behappy": "data-ad-client=ca-pub-3126784834320338",
-    "4348-91games": "data-ad-client=ca-pub-3126784834320338",
-    "4348-cpsense": "data-ad-client=ca-pub-3126784834320338",
-    "4348-cpsense-cd": "data-ad-client=ca-pub-3126784834320338",
-    "4319-behappy": "data-ad-client=ca-pub-3126784834320338",
-    "4319-91games": "data-ad-client=ca-pub-3126784834320338",
-    "4319-cpsense": "data-ad-client=ca-pub-3126784834320338",
-    "4319-cpsense-cd": "data-ad-client=ca-pub-3126784834320338",
-    "marketjs": "/23260026613/h5-game/h5-game-rewarded",
-    "behappy": "/23260026613/h5-game/h5-game-rewarded",
-    "91games": "/23260026613/h5-game/h5-game-rewarded-91games",
-    "cpsense": "/23260026613/h5-game/h5-game-rewarded-cpsense",
-    "cpsense-cd": "/23260026613/h5-game/h5-game-rewarded-cpsense-cd",
-    "default_ads": "/23260026613/h5-game/h5-game-rewarded"
+    "marketjs": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=7942679940",
+    "behappy": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=1678988102",
+    "91games": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=1916701377",
+    "cpsense": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=9810653203",
+    "cpsense-cd": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=5196620779",
+    "default_ads": "data-ad-client=ca-pub-4230754353315567,data-ad-channel=3969174711"
 };

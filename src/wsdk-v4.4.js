@@ -98,7 +98,7 @@ var w_script = {
 }
 
 let plurl = 'https://www.cpsense.com/public/PRESDK3.0.1.js'
-// let plurl = 'http://localhost:13600/src/cpsdk1.3.js'
+// let plurl = 'http://localhost:13600/src/prsdk1.3.js'
 loadsdk(plurl).then(() => {
 
   console.log('加载成功')

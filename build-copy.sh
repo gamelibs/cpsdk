@@ -12,7 +12,7 @@ files=(
   "index.html"
   "src/wsdk-v4.4.js"
   "src/main.js"
-  "src/cpsdk1.3.js"
+  "src/prsdk1.3.js"
   "src/iframesdk1.0.js"
   "game/index.html"
 )

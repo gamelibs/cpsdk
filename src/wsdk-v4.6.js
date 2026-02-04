@@ -255,7 +255,7 @@ wsdk.gameDot = (events, value = '') => {
 
 // 将 index.html stub 收集的早期事件挂回 wsdk._preDotQueue：
 // - 如果此时 wop.isDot 已就绪，可立即回放；
-// - 否则等待 Cpsdk/game 在配置就绪后显式调用 wsdk.replayPreDotQueue()
+// - 否则等待 prsdk/game 在配置就绪后显式调用 wsdk.replayPreDotQueue()
 if (Array.isArray(__wsdkPreDotQueue) && __wsdkPreDotQueue.length) {
     try {
         __wsdkPreDotQueue.forEach((args) => {
@@ -317,7 +317,9 @@ var w_script = {
     onerror: null,
 }
 
-let plurl = 'https://www.cpsense.com/public/PRESDK3.0.1.js'
+// let plurl = 'https://www.cpsense.com/public/PRESDK3.0.1.js'
+
+let plurl = 'http://localhost:8848/src/prsdk-ad1.3.js'
 
 loadsdk(plurl).then(() => {
 
@@ -334,13 +336,13 @@ loadsdk(plurl).then(() => {
 // Initialize Advertising SDK
 w_script.onload = function () {
     console.log('loaded ads')
-    // setup a 2s fallback to ensure adReady is emitted even if SDK event bus fails
+    // setup a 8s fallback to ensure adReady is emitted even if SDK event bus fails
     if (adReadyFallbackTimer) clearTimeout(adReadyFallbackTimer)
     adReadyFallbackTimer = setTimeout(() => {
         if (!wsdk.hasEmitted('adReady')) {
             wsdk.emit('adReady')
         }
-    }, 2000)
+    }, 8000)
     const adSdkConfig = {
         el: document.querySelector('#adcontent'),
         client: wop.channel || wop.adChannel,
@@ -386,13 +388,13 @@ w_script.onload = function () {
 
 w_script.onerror = function () {
     wsdk.gameDot(W_DOT.AD_LOAD_ERROR, 'sdk load no')
-    // if load fails, still try to become ready after 2s for downstream logic continuity
+    // if load fails, still try to become ready after 8s for downstream logic continuity
     if (adReadyFallbackTimer) clearTimeout(adReadyFallbackTimer)
     adReadyFallbackTimer = setTimeout(() => {
         if (!wsdk.hasEmitted('adReady')) {
             wsdk.emit('adReady')
         }
-    }, 2000)
+    }, 8000)
 }
 
 let gamecallback = null
@@ -571,6 +573,7 @@ wsdk.showAd = (type, callback) => {
                             isTimeOut = true
                             typeof gamebox !== 'undefined' && (gamebox.style.display = 'none')
                             wsdk.gameDot(DOT.GAME_INTERSTITIAL_OPEN, 'fristad open')
+                            try { wsdk.emit && wsdk.emit('beforeAd', { type: 'fristad' }); } catch (e) {}
                         },
                         afterAd() {
                             isTimeOut = true

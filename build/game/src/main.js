@@ -34,12 +34,12 @@ sdkReadyEl.textContent = 'waiting...';
 
 function attachAdListeners(ai) {
   if (!ai || !ai._eventAds || typeof ai._eventAds.on !== 'function') return false;
-  // CPSDK emits ready with (param1, param2) where param2 is often a short code
+  // prsdk emits ready with (param1, param2) where param2 is often a short code
   // representing which ad subsystem became ready: 's' (adsense), 'x' (ima/adx), 'gpt' (gpt), or sometimes specific names.
   ai._eventAds.on('ready', (param1, param2) => {
     let adType = 'unknown';
 
-    // Prefer the second parameter from CPSDK if present
+    // Prefer the second parameter from prsdk if present
     if (param2) {
       const p = (typeof param2 === 'string') ? param2.toLowerCase() : String(param2);
       if (p === 's' || p.indexOf('adsense') !== -1) adType = 'adsense';
@@ -48,7 +48,7 @@ function attachAdListeners(ai) {
       else if (p.indexOf('android') !== -1 || p.indexOf('androidads') !== -1 || p.indexOf('android_ads') !== -1) adType = 'android';
       else adType = param2;
     } else if (ai && ai.adType) {
-      // Fallback to the CPSDK instance property
+      // Fallback to the prsdk instance property
       adType = ai.adType;
     } else if (window.wsdk && window.wsdk.adType) {
       // Last resort: wsdk property (may be inaccurate in some setups)
@@ -57,7 +57,7 @@ function attachAdListeners(ai) {
       adType = ai._adType;
     }
 
-    // Normalize common CPSDK adType values (adsType mapping)
+    // Normalize common prsdk adType values (adsType mapping)
     if (typeof adType === 'string') {
       const norm = adType.toLowerCase();
       if (norm === 'androidads' || norm === 'android') adType = 'android';
